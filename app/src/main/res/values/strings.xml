@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">子曰</string>
+    <string name="tag_stranger">陌生人：</string>
+    <string name="stranger_left">陌生人已离开，正在重新匹配</string>
+    <string name="recv_cmd_but_shield">对方给你发送了一个命令，但已经被屏蔽</string>
+    <string name="recv_invalid_cmd">对方对您的手机执行了不合法的命令，已被屏蔽</string>
+    <string name="cannot_send_cmd">由于你屏蔽了命令，所以你也不能发送命令</string>
+    <string name="this_cmd_cannot_send">该命令不允许发送</string>
+    <string name="stranger_no_sign">对方没有设置签名</string>
+    <string name="match_successful">匹配用户成功，现在可以开始聊天啦</string>
+    <string name="login_successful">登录成功</string>
+    <string name="matching_user">正在匹配用户...请等待</string>
+    <string name="deal_error">出了点小问题，正在为您处理</string>
+    <string name="reg_successful">注册成功</string>
+    <string name="menu_title_help">帮助</string>
+    <string name="alert_leaving_chat">你想退出聊天吗？</string>
+    <string name="alert_cancel">取消</string>
+    <string name="alert_ok">确定</string>
+    <string name="sign_prefix">签名：</string>
+</resources>

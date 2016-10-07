@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:weightSum="10"
+    android:background="#ff000000"
+    android:id="@+id/layout_root"
+    android:windowSoftInputMode="adjustResize"
+    tools:context="com.woc.chat.MainActivity">
+
+    <android.support.v7.widget.RecyclerView
+        android:layout_width="match_parent"
+        android:layout_weight="9"
+        android:id="@+id/main_recycler_view"
+        android:layout_height="wrap_content" />
+
+        <LinearLayout
+            android:layout_weight="1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+            android:weightSum="10"
+        >
+        <EditText
+            android:layout_weight="9.2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/edittext_style"
+            android:maxLines="2"
+            android:id="@+id/edit_msg"
+            />
+        <Button
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginBottom="5dp"
+            android:layout_weight="0.8"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/blue_button"
+            android:id="@+id/button_send"
+            android:text="发送" />
+    </LinearLayout>
+</LinearLayout>

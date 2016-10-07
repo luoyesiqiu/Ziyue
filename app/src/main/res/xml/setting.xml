@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="基本设置" >
+        <CheckBoxPreference
+            android:key="checkbox_receive_msg"
+            android:summary="当你选择不接收任何命令，你也发送不了任何命令"
+            android:title="不接收任何命令" />
+    </PreferenceCategory>
+</PreferenceScreen>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:fitsSystemWindows="true"
+    tools:context="com.woc.chat.MainAct">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <com.woc.chat.terminal.TerminalView
+            android:id="@+id/terminalView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@null"
+            android:ems="10"
+            android:gravity="top|left"
+            android:imeOptions="actionSend"
+            android:inputType="textMultiLine"
+            android:longClickable="false"
+            android:padding="8dp"
+            android:textColor="#ffffff"
+            android:textIsSelectable="false"
+            android:textSize="14sp"/>
+    </ScrollView>
+
+</RelativeLayout>
