@@ -651,7 +651,6 @@ public class MainAct extends AppCompatActivity {
         });
     }
 
-
     /**
      * 退出登陆
      */
