@@ -22,6 +22,7 @@ import java.util.Set;
 
 /**
  * Created by zyw on 2016/9/1.
+ * 主界面
  */
 public class ChatAdapter extends  RecyclerView.Adapter<RecyclerView.ViewHolder> implements View.OnClickListener,View.OnLongClickListener{
 
