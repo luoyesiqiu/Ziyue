@@ -4,11 +4,6 @@ import android.util.Log;
 
 import java.util.ArrayList;
 
-/**
- * Description:
- * User: Pencil
- * Date: 2016/10/4 0004
- */
 public class Controller extends Thread {
     private TerminalView mTerminalView;
     private StepPrinter mStepPrinter;
@@ -16,6 +11,7 @@ public class Controller extends Thread {
     private boolean mLoop = true;
     private final Object mLoopLock = new Object();
     private final Object mTaskLock = new Object();
+    private final Object mTextEditLock = new Object();
 
     private ArrayList<Task> mTasks;
 
@@ -29,7 +25,7 @@ public class Controller extends Thread {
         while (mLoop) {
             while (!mTasks.isEmpty()) {
                 Task task = mTasks.get(0);
-                Log.d("===================", "[exec  ] " + (task == null ? "null" : task.getName()));
+                Log.d("===================", "[exec  ] " + task.getName());
                 if (isRunning()) {
                     synchronized (mTaskLock) {
                         try {
@@ -41,10 +37,35 @@ public class Controller extends Thread {
                     }
                 }
 
-                if (task != null)
-                    task.exec();
+                task.exec();
 
-                mTerminalView.updateWaitingState();
+                Log.d("===================", "[edexec] " + task.getName());
+
+                if (!task.isPrinterTask() && mTerminalView.updateWaitingState()) {
+                    synchronized (mTextEditLock) {
+                        try {
+                            Log.d(">>>>>>>>>", "print prefix after waiting");
+                            mTerminalView.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mTerminalView.startEdit();
+                                    CharSequence prefix = mTerminalView.getPrefix();
+                                    mTerminalView.append(prefix);
+                                    mTerminalView.setCurrentPrefix(prefix);
+                                    mTerminalView.finishEdit();
+
+                                    synchronized (mTextEditLock) {
+                                        Log.d("===================", "[notify edit  ]");
+                                        mTextEditLock.notify();
+                                    }
+                                }
+                            });
+                            Log.d("===================", "[wait   edit  ]");
+                            mTextEditLock.wait();
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                }
 
                 mTasks.remove(task);
             }
@@ -63,8 +84,8 @@ public class Controller extends Thread {
         return mStepPrinter != null && mStepPrinter.isRunning();
     }
 
-    protected void createPrinter(CharSequence text, boolean endsWithNewLine, boolean showPrefix) {
-        mStepPrinter = new StepPrinter(mTerminalView, text, endsWithNewLine, showPrefix) {
+    protected void createPrinter(CharSequence text, boolean endsWithNewLine, CharSequence prefix) {
+        mStepPrinter = new StepPrinter(mTerminalView, text, endsWithNewLine, prefix) {
             @Override
             protected void onFinish() {
                 onTaskFinish();
@@ -77,7 +98,21 @@ public class Controller extends Thread {
         boolean running = isRunning();
 
         if (running)
-            postTask(null);
+            postTask(new Task() {
+                @Override
+                public void exec() {
+                }
+
+                @Override
+                public boolean isPrinterTask() {
+                    return false;
+                }
+
+                @Override
+                public String getName() {
+                    return "<Skip>";
+                }
+            });
 
         return running;
     }
@@ -108,7 +143,7 @@ public class Controller extends Thread {
 
     private void onTaskFinish() {
         synchronized (mTaskLock) {
-            Log.d("===================", "[notify task  ] printer finish");
+            Log.d("===================", "[notify task  ]");
             mTaskLock.notify();
         }
     }
@@ -127,6 +162,8 @@ public class Controller extends Thread {
 
     protected interface Task {
         void exec();
+
+        boolean isPrinterTask();
 
         String getName();
     }

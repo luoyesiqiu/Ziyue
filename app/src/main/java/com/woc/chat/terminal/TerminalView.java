@@ -15,16 +15,12 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.widget.EditText;
 
-/**
- * Description:
- * User: Pencil
- * Date: 2016/9/21 0021
- */
 public class TerminalView extends EditText {
     public static final int STEP_MILLS = 100;
     public static final String PREFIX = ">";
 
     private volatile CharSequence mPrefix = PREFIX;
+    private volatile CharSequence mCurrentPrefix = PREFIX;
     private volatile int mStepMills = STEP_MILLS;
 
     private boolean mWaiting;
@@ -59,8 +55,7 @@ public class TerminalView extends EditText {
                     mLastEditablePosition = getText().length() + changedLength;
                 else
                     mLastEditablePosition += changedLength;
-                Log.d("-----------", "mLastEditablePosition " + mLastEditablePosition);
-                //Log.d("------------------", "filter " + source + " " + start + " " + end + " " + dest + " " + dstart + " " + dend + " len: " + changedLength);
+                Log.d("---------", "filter " + source + ", at " + dstart + ", mLastEditablePosition " + mLastEditablePosition);
             } else {
                 if (mEditable) {
                     if (source.length() == 0 /* "delete" action */ && getSelectionStart() <= mLastEditablePosition) {
@@ -91,7 +86,7 @@ public class TerminalView extends EditText {
 
                         startWaiting();
 
-                        postLine(null, false, false);
+                        printText(null, false, true, null);
 
                         onSubmit();
                     }
@@ -134,80 +129,117 @@ public class TerminalView extends EditText {
     }
 
     public void postText(CharSequence text, boolean stepping) {
-        printText(text, stepping, false, false);
+        printText(text, stepping, false, null);
     }
 
     public void postColoredText(CharSequence text, int color, boolean stepping) {
         SpannableString sb = SpannableString.valueOf(text);
         sb.setSpan(new ForegroundColorSpan(color), 0, sb.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-        printText(sb, stepping, false, false);
+        printText(sb, stepping, false, null);
     }
 
-    public void postLine(CharSequence text, boolean stepping, boolean showPrefix) {
-        printText(text, stepping, true, showPrefix);
+    public void postLine(CharSequence text, boolean stepping, CharSequence prefix) {
+        printText(text, stepping, true, prefix);
     }
 
-    public void postColoredLine(CharSequence text, int color, boolean stepping, boolean showPrefix) {
+    public void postColoredLine(CharSequence text, int color, boolean stepping, CharSequence prefix) {
         SpannableString sb = SpannableString.valueOf(text);
         sb.setSpan(new ForegroundColorSpan(color), 0, sb.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-        printText(sb, stepping, true, showPrefix);
+        printText(sb, stepping, true, prefix);
     }
 
-    private void printText(final CharSequence text, final boolean stepping, final boolean endsWithNewLine, final boolean showPrefix) {
+    private void printText(final CharSequence text, final boolean stepping, final boolean endsWithNewLine, final CharSequence prefix) {
         if (text != null && text.length() != 0) {
-
             if (stepping) {
                 mController.postTask(new Controller.Task() {
                     @Override
                     public void exec() {
-                        mController.createPrinter(text, endsWithNewLine, showPrefix);
+                        mController.createPrinter(text, endsWithNewLine, prefix);
+                    }
+
+                    @Override
+                    public boolean isPrinterTask() {
+                        return true;
                     }
 
                     @Override
                     public String getName() {
-                        return "<Create printer " + text + ">";
+                        return "<Create printer " + (prefix == null ? "" : prefix) + text + ">";
                     }
                 });
             } else {
                 mController.postTask(new Controller.Task() {
-                    @Override
-                    public void exec() {
-                        post(new Runnable() {
-                            @Override
-                            public void run() {
-                                mTextEditProgrammaticallyFlag = true;
+                                         @Override
+                                         public void exec() {
+                                             final Object textEditLock = new Object();
 
-                                boolean insert = !mWaiting;
+                                             synchronized (textEditLock) {
+                                                 try {
+                                                     post(new Runnable() {
+                                                         @Override
+                                                         public void run() {
+                                                             mTextEditProgrammaticallyFlag = true;
 
-                                if (insert) {
-                                    Editable viewText = getText();
-                                    int position = mLastEditablePosition - mPrefix.length();
-                                    if (position < 0)
-                                        position = 0;
+                                                             boolean insert = !mWaiting;
 
-                                    viewText.insert(position, "\n");
+                                                             if (insert) {
+                                                                 Editable viewText = getText();
+                                                                 int position = mLastEditablePosition - (mCurrentPrefix == null ? 0 : mCurrentPrefix.length());
+                                                                 Log.d("---------", mLastEditablePosition + " - " + (mCurrentPrefix == null ? 0 : mCurrentPrefix.length()) + " = " + position);
+                                                                 if (position < 0)
+                                                                     position = 0;
 
-                                    if (showPrefix)
-                                        viewText.insert(position, mPrefix);
+                                                                 Log.d("---------", "instantly insert " + text + " at " + position + (endsWithNewLine ? " and append new line" : ""));
+                                                                 viewText.insert(position, "\n");
 
-                                    viewText.insert(position, text);
-                                } else {
-                                    append(text);
-                                }
+                                                                 if (prefix != null) {
+                                                                     viewText.insert(position, prefix);
+                                                                     position += prefix.length();
+                                                                 }
 
-                                mTextEditProgrammaticallyFlag = false;
-                            }
-                        });
-                    }
+                                                                 viewText.insert(position, text);
+                                                             } else {
+                                                                 Log.d("---------", "instantly append " + text + (endsWithNewLine ? " and append new line" : ""));
+                                                                 if (prefix != null)
+                                                                     append(prefix);
 
-                    @Override
-                    public String getName() {
-                        return "<Do print (skip) " + text + ">";
-                    }
-                });
+                                                                 append(text);
+                                                             }
+
+                                                             if (endsWithNewLine && !insert)
+                                                                 append("\n");
+
+                                                             mTextEditProgrammaticallyFlag = false;
+
+                                                             synchronized (textEditLock) {
+                                                                 textEditLock.notify();
+                                                             }
+                                                         }
+                                                     });
+
+                                                     textEditLock.wait();
+                                                 } catch (InterruptedException ignored) {
+                                                 }
+                                             }
+                                         }
+
+                                         @Override
+                                         public boolean isPrinterTask() {
+                                             return false;
+                                         }
+
+                                         @Override
+                                         public String getName() {
+                                             return "<Do print (skip) " + (prefix == null ? "" : prefix) + text + ">";
+                                         }
+                                     }
+
+                );
             }
-        } else if (endsWithNewLine) {
-            printText("\n", false, false, false);
+        } else if (endsWithNewLine)
+
+        {
+            printText("\n", false, false, null);
         }
     }
 
@@ -250,12 +282,15 @@ public class TerminalView extends EditText {
         mEditable = mShouldBeEditableAfterWaiting;
     }
 
-    protected void updateWaitingState() {
+    protected boolean updateWaitingState() {
         if (mAboutToStopWaiting) {
-            Log.d(">>>>>>>>>", "[stop waiting]");
+            Log.d(">>>>>>>>>", "stop waiting");
             mAboutToStopWaiting = false;
             stopWaiting();
+
+            return true;
         }
+        return false;
     }
 
     public boolean isWaiting() {
@@ -265,53 +300,58 @@ public class TerminalView extends EditText {
     public void finish() {
         if (mWaiting) {
             if (mController.hasTask() || mController.isRunning()) {
-                Log.d(">>>>>>>>>", "[be about to stop waiting]");
+                Log.d(">>>>>>>>>", "be about to stop waiting");
                 mAboutToStopWaiting = true;
             } else {
-                Log.d(">>>>>>>>>", "[instantly stop waiting]");
+                Log.d(">>>>>>>>>", "instantly stop waiting");
                 stopWaiting();
 
-                if (!mController.isRunning()) {
-                    mController.postTask(new Controller.Task() {
-                        @Override
-                        public void exec() {
-                            final Object lock = new Object();
+                mController.postTask(new Controller.Task() {
+                    @Override
+                    public void exec() {
+                        final Object lock = new Object();
 
-                            synchronized (lock) {
-                                try {
-                                    post(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            mTextEditProgrammaticallyFlag = true;
-                                            append(mPrefix);
-                                            mTextEditProgrammaticallyFlag = false;
+                        synchronized (lock) {
+                            try {
+                                post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        mTextEditProgrammaticallyFlag = true;
+                                        append(mPrefix);
+                                        mCurrentPrefix = mPrefix;
+                                        mTextEditProgrammaticallyFlag = false;
 
-                                            synchronized (lock) {
-                                                Log.d("===================", "[notify finish]");
-                                                lock.notify();
-                                            }
+                                        synchronized (lock) {
+                                            Log.d("===================", "[notify in finish]");
+                                            lock.notify();
                                         }
-                                    });
+                                    }
+                                });
 
-                                    Log.d("===================", "[wait   finish]");
-                                    lock.wait();
-                                } catch (InterruptedException ignored) {
-                                }
+                                Log.d("===================", "[wait   in finish]");
+                                lock.wait();
+                                Log.d("===================", "[wait2   in finish]");
+                            } catch (InterruptedException ignored) {
                             }
                         }
+                    }
 
-                        @Override
-                        public String getName() {
-                            return "<Finish with prefix>";
-                        }
-                    });
-                }
+                    @Override
+                    public boolean isPrinterTask() {
+                        return false;
+                    }
+
+                    @Override
+                    public String getName() {
+                        return "<Finish with prefix>";
+                    }
+                });
             }
         }
     }
 
-    public void recoverLastSubmission() {
-        printText(mLastSubmission, false, false, false);
+    public void restoreLastSubmission() {
+        printText(mLastSubmission, false, false, null);
     }
 
     protected void startEdit() {
@@ -367,43 +407,62 @@ public class TerminalView extends EditText {
         mStepMills = stepMills;
     }
 
+    public CharSequence getCurrentPrefix() {
+        return mCurrentPrefix;
+    }
+
+    protected void setCurrentPrefix(CharSequence currentPrefix) {
+        mCurrentPrefix = currentPrefix;
+    }
+
     public CharSequence getPrefix() {
         return mPrefix;
     }
 
     public void setPrefix(CharSequence prefix) {
-        final int oldLength = mPrefix.length();
-        mPrefix = prefix;
+        setPrefix(prefix, false);
+    }
 
-        if (!mWaiting) {
+    public void setPrefix(final CharSequence prefix, boolean instant) {
+        if (mWaiting) {
+            mPrefix = prefix;
+        } else if (instant || !(mController.hasTask() || mController.isRunning())) {
             mController.postTask(new Controller.Task() {
                 @Override
                 public void exec() {
-                    final Controller.Task thiz = this;
-                    synchronized (this) {
+                    final Object lock = new Object();
+
+                    synchronized (lock) {
                         try {
-                            mTextEditProgrammaticallyFlag = true;
                             post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    replace(mPrefix, mLastEditablePosition - oldLength, mLastEditablePosition);
+                                    int offset = mCurrentPrefix == null ? 0 : mCurrentPrefix.length();
+                                    replace(prefix, mLastEditablePosition - offset, mLastEditablePosition);
 
-                                    synchronized (thiz) {
-                                        thiz.notify();
+                                    mCurrentPrefix = prefix;
+                                    mPrefix = prefix;
+
+                                    synchronized (lock) {
+                                        lock.notify();
                                     }
                                 }
                             });
-                            mTextEditProgrammaticallyFlag = false;
 
-                            wait();
+                            lock.wait();
                         } catch (InterruptedException ignored) {
                         }
                     }
                 }
 
                 @Override
+                public boolean isPrinterTask() {
+                    return false;
+                }
+
+                @Override
                 public String getName() {
-                    return "Replace " + mPrefix;
+                    return "Replace " + prefix;
                 }
             });
         }

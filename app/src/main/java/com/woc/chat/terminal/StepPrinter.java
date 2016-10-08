@@ -6,11 +6,6 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.util.Log;
 
-/**
- * Description:
- * User: Pencil
- * Date: 2016/10/4 0004
- */
 public abstract class StepPrinter extends Thread {
     private TerminalView mTerminalView;
 
@@ -29,7 +24,7 @@ public abstract class StepPrinter extends Thread {
     private final Object mLock = new Object();
     private boolean mLocking;
 
-    public StepPrinter(TerminalView terminalView, CharSequence text, boolean endsWithNewLine, final boolean showPrefix) {
+    public StepPrinter(TerminalView terminalView, CharSequence text, boolean endsWithNewLine, final CharSequence prefix) {
         mTerminalView = terminalView;
 
         mInsert = !mTerminalView.isWaiting();
@@ -41,8 +36,9 @@ public abstract class StepPrinter extends Thread {
                     @Override
                     public void run() {
                         if (mInsert) {
-                            mStart = mTerminalView.getLastEditablePosition() - mTerminalView.getPrefix().length();
-                            Log.d("-------------", mTerminalView.getLastEditablePosition() + " - " + mTerminalView.getPrefix().length() + " = " + mStart);
+                            CharSequence curPrefix = mTerminalView.getCurrentPrefix();
+                            mStart = mTerminalView.getLastEditablePosition() - (curPrefix == null ? 0 : curPrefix.length());
+                            Log.d("---------", mTerminalView.getLastEditablePosition() + " - " + (curPrefix == null ? 0 : curPrefix.length()) + " = " + mStart);
                             if (mStart < 0)
                                 mStart = 0;
 
@@ -51,9 +47,9 @@ public abstract class StepPrinter extends Thread {
                             mStart = mTerminalView.getText().length();
                         }
 
-                        if (showPrefix) {
-                            doPrint(mTerminalView.getPrefix(), mStart);
-                            mStart += mTerminalView.getPrefix().length();
+                        if (prefix != null) {
+                            doPrint(prefix, mStart);
+                            mStart += prefix.length();
                         }
 
                         synchronized (mLock) {
