@@ -17,7 +17,7 @@ import android.widget.EditText;
 
 public class TerminalView extends EditText {
     public static final int STEP_MILLS = 100;
-    public static final String PREFIX = ">";
+    public static final String PREFIX = "";
 
     private volatile CharSequence mPrefix = PREFIX;
     private volatile CharSequence mCurrentPrefix = PREFIX;
@@ -271,13 +271,13 @@ public class TerminalView extends EditText {
         }
     }
 
-    private void startWaiting() {
+    public void startWaiting() {
         mWaiting = true;
         mShouldBeEditableAfterWaiting = mEditable;
         mEditable = false;
     }
 
-    private void stopWaiting() {
+    public void stopWaiting() {
         mWaiting = false;
         mEditable = mShouldBeEditableAfterWaiting;
     }

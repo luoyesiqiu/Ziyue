@@ -90,7 +90,35 @@ public class MainAct extends AppCompatActivity {
         login();
         startReceiveMsg();
         startListenUserState();
+
     }
+
+    /**
+     * 重新匹配用户
+     */
+    private void rematchUser()
+    {
+        if(_curUser!=null)
+        {
+            _curUser.setChatWith("");
+            _curUser.update(new UpdateListener() {
+                @Override
+                public void done(BmobException e) {
+                    if(e==null)
+                    {
+
+                    }
+                }
+            });
+            if(_friendId!=null)
+            {
+
+            }
+        }
+    }
+
+
+
 
     /**
      * 开始监听user表的变化
@@ -116,10 +144,8 @@ public class MainAct extends AppCompatActivity {
                         return;
                     //看对方是否处于离线状态
                     if(userParser.getData().getIsOnline()==false&&tempName.equals(_friendName)) {
-                        _terminalView.setPrefix(SYSTEM_PREFIX);
-                        _terminalView.postColoredLine(getString(R.string.stranger_left), Color.RED,true,true);
+                        _terminalView.postColoredLine(getString(R.string.stranger_left), Color.RED,true,SYSTEM_PREFIX);
                         _terminalView.setPrefix(ROOT_PREFIX);
-                        //_terminalView.finish();
                         if(_isBackground) {
                             showNotification(getString(R.string.stranger_left),getString(R.string.app_name),getString(R.string.stranger_left));
                         }
@@ -179,10 +205,8 @@ public class MainAct extends AppCompatActivity {
                         {
                             if(_settingPreferences.getBoolean("checkbox_receive_msg",false))
                             {
-                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                _terminalView.postColoredLine(getString(R.string.recv_cmd_but_shield),Color.RED,true,true);
+                                _terminalView.postColoredLine(getString(R.string.recv_cmd_but_shield),Color.RED,true,SYSTEM_PREFIX);
                                 _terminalView.setPrefix(ROOT_PREFIX);
-                                //_terminalView.finish();
                                 if(_isBackground) {
                                     showNotification(getString(R.string.recv_cmd_but_shield),getString(R.string.app_name),getString(R.string.recv_cmd_but_shield));
                                 }
@@ -193,8 +217,7 @@ public class MainAct extends AppCompatActivity {
                             //不合法的命令去除,要传进去$
                             if(!availableCmd(msg))
                             {
-                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                _terminalView.postColoredLine("",Color.RED,true,true);
+                                _terminalView.postColoredLine("",Color.RED,true,SYSTEM_PREFIX);
                                 _terminalView.setPrefix(ROOT_PREFIX);
                                // _terminalView.finish();
                                 if(_isBackground)
@@ -203,8 +226,7 @@ public class MainAct extends AppCompatActivity {
                                 }
                                 return;
                             }
-                            _terminalView.setPrefix(SYSTEM_PREFIX);
-                            _terminalView.postColoredLine("对方对您的手机执行了‘" + shell + "'命令",Color.RED,true,true);
+                            _terminalView.postColoredLine("对方对您的手机执行了‘" + shell + "'命令",Color.RED,true,SYSTEM_PREFIX);
                             _terminalView.setPrefix(ROOT_PREFIX);
                             if(_isBackground)
                             {
@@ -254,15 +276,13 @@ public class MainAct extends AppCompatActivity {
                             }
                         } else if (msg.startsWith(CMD_RESULT_PREFIX))//接收到命令执行结果的时候，不慢速显示文本
                         {
-                            _terminalView.setPrefix(USER_PREFIX);
-                            _terminalView.postColoredLine(msg.substring(2, msg.length()),Color.GREEN,false,true);
+                            _terminalView.postColoredLine(msg.substring(2, msg.length()),Color.GREEN,false,USER_PREFIX);
                             _terminalView.setPrefix(ROOT_PREFIX);
 
                         } else//纯文本,慢速显示文本
                         {
                             //显示对方发来的文本消息
-                            _terminalView.setPrefix(USER_PREFIX);
-                            _terminalView.postColoredLine(msg,Color.GREEN,true,true);
+                            _terminalView.postColoredLine(msg,Color.GREEN,true,USER_PREFIX);
                             _terminalView.setPrefix(ROOT_PREFIX);
                             if(_isBackground) {
                                 showNotification(getString(R.string.tag_stranger) + msg, getString(R.string.app_name), getString(R.string.tag_stranger) + msg);
@@ -349,8 +369,7 @@ public class MainAct extends AppCompatActivity {
                         //屏蔽命令
                         if (_settingPreferences.getBoolean("checkbox_receive_msg", false)&&!CustomCmd.isLocalCustomCmd(shell))
                         {
-                            _terminalView.setPrefix(SYSTEM_PREFIX);
-                            _terminalView.postColoredLine(getString(R.string.cannot_send_cmd),Color.RED,true,true);
+                            _terminalView.postColoredLine(getString(R.string.cannot_send_cmd),Color.RED,true,SYSTEM_PREFIX);
                             _terminalView.setPrefix(ROOT_PREFIX);
                             return;
                         } else
@@ -358,8 +377,7 @@ public class MainAct extends AppCompatActivity {
                         {
                             //命令不合法直接提示并返回
                             if (!availableCmd(msg)) {
-                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                _terminalView.postColoredLine(getString(R.string.this_cmd_cannot_send),Color.RED,true,true);
+                                _terminalView.postColoredLine(getString(R.string.this_cmd_cannot_send),Color.RED,true,SYSTEM_PREFIX);
                                 _terminalView.setPrefix(ROOT_PREFIX);
                                 return;
                             }
@@ -368,8 +386,7 @@ public class MainAct extends AppCompatActivity {
                             {
                                 System.out.println("-------------->local");
                                 String result=CustomCmd.runLocalCmd(MainAct.this, _curUser,shell);
-                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                _terminalView.postColoredLine(result,Color.GREEN,true,true);
+                                _terminalView.postColoredLine(result,Color.GREEN,true,SYSTEM_PREFIX);
                                 _terminalView.setPrefix(ROOT_PREFIX);
                             }else
                              {
@@ -418,6 +435,7 @@ public class MainAct extends AppCompatActivity {
         /**
          *查询已抽到自己的人
          */
+        _terminalView.startWaiting();
         BmobQuery<User> queryChatWith = new BmobQuery<User>();
         queryChatWith.addWhereEqualTo("chatWith", _curUser.getUsername());//查询和自己聊天的
         queryChatWith.addWhereEqualTo("isOnline", true);
@@ -469,8 +487,7 @@ public class MainAct extends AppCompatActivity {
                                             if (e == null) {
                                                 System.out.println("--------------------->1" + _friendName);
                                                 _state = State.CHATTING;
-                                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                                _terminalView.postColoredLine(getString(R.string.match_successful),Color.RED,true,true);
+                                                _terminalView.postColoredLine(getString(R.string.match_successful),Color.RED,true,SYSTEM_PREFIX);
                                                 _terminalView.setPrefix(ROOT_PREFIX);
                                                 //查询对方签名
                                                 BmobQuery<User> friendQuery=new BmobQuery<User>();
@@ -482,22 +499,21 @@ public class MainAct extends AppCompatActivity {
                                                         if(e==null) {
                                                             User newFriend=list.get(0);
                                                             if (newFriend.getSign() == null) {
-                                                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                                                _terminalView.postColoredLine(getString(R.string.stranger_no_sign),SIGN_COLOR,true,true);
+                                                                _terminalView.postColoredLine(getString(R.string.stranger_no_sign),SIGN_COLOR,true,SYSTEM_PREFIX);
                                                                 _terminalView.setPrefix(ROOT_PREFIX);
                                                             } else {
-                                                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                                                _terminalView.postColoredLine(getString(R.string.sign_prefix)+newFriend.getSign(),SIGN_COLOR,true,true);
+                                                                _terminalView.postColoredLine(getString(R.string.sign_prefix)+newFriend.getSign(),SIGN_COLOR,true,SYSTEM_PREFIX);
                                                                 _terminalView.setPrefix(ROOT_PREFIX);
                                                             }
+                                                            _terminalView.stopWaiting();
                                                         }
                                                     }
                                                 });
 
                                             } else {
-                                                _terminalView.setPrefix(SYSTEM_PREFIX);
-                                                _terminalView.postColoredLine(_friendId + ":修改用户状态失败,原因：" + e.toString(),Color.RED,true,true);
+                                                _terminalView.postColoredLine(_friendId + ":修改用户状态失败,原因：" + e.toString(),Color.RED,true,SYSTEM_PREFIX);
                                                 _terminalView.setPrefix(ROOT_PREFIX);
+                                                _terminalView.stopWaiting();
                                             }
                                         }
                                     });
@@ -535,25 +551,24 @@ public class MainAct extends AppCompatActivity {
                                 if (e == null) {
                                     System.out.println("--------------------->2" + _friendName);
                                     _state = State.CHATTING;
-                                    _terminalView.setPrefix(SYSTEM_PREFIX);
-                                    _terminalView.postColoredLine(getString(R.string.match_successful),Color.RED,true,true);
+                                    _terminalView.postColoredLine(getString(R.string.match_successful),Color.RED,true,SYSTEM_PREFIX);
                                     _terminalView.setPrefix(ROOT_PREFIX);
                                     //设置签名
                                     if(friend.getSign()==null) {
-                                        _terminalView.setPrefix(SYSTEM_PREFIX);
-                                        _terminalView.postColoredLine(getString(R.string.stranger_no_sign),SIGN_COLOR,true,true);
+                                        _terminalView.postColoredLine(getString(R.string.stranger_no_sign),SIGN_COLOR,true,SYSTEM_PREFIX);
                                         _terminalView.setPrefix(ROOT_PREFIX);
+                                        _terminalView.stopWaiting();
                                     }
                                     else
                                     {
-                                        _terminalView.setPrefix(SYSTEM_PREFIX);
-                                        _terminalView.postColoredLine(getString(R.string.sign_prefix)+friend.getSign(),SIGN_COLOR,true,true);
+                                        _terminalView.postColoredLine(getString(R.string.sign_prefix)+friend.getSign(),SIGN_COLOR,true,SYSTEM_PREFIX);
                                         _terminalView.setPrefix(ROOT_PREFIX);
+                                        _terminalView.stopWaiting();
                                     }
                                 } else {
-                                    _terminalView.setPrefix(SYSTEM_PREFIX);
-                                    _terminalView.postColoredLine(_friendId + ":修改用户状态失败,原因：" + e.toString(),Color.RED,true,false);
+                                    _terminalView.postColoredLine(_friendId + ":修改用户状态失败,原因：" + e.toString(),Color.RED,true,SYSTEM_PREFIX);
                                     _terminalView.setPrefix(ROOT_PREFIX);
+                                    _terminalView.stopWaiting();
                                 }
                             }
                         });
@@ -585,13 +600,12 @@ public class MainAct extends AppCompatActivity {
                     if (e == null) {
                         _state = State.MATCH_USER;
                         getRandomUser();
-                        _terminalView.setPrefix(SYSTEM_PREFIX);
-                        _terminalView.postColoredLine(getString(R.string.login_successful),Color.RED,true,true);
-                        _terminalView.postColoredLine(getString(R.string.matching_user),Color.RED,true,true);
+                        _terminalView.postColoredLine(getString(R.string.login_successful),Color.RED,true,SYSTEM_PREFIX);
+                        _terminalView.postColoredLine(getString(R.string.matching_user),Color.RED,true,SYSTEM_PREFIX);
                         _terminalView.setPrefix(ROOT_PREFIX);
+
                     } else {
-                        _terminalView.setPrefix(SYSTEM_PREFIX);
-                        _terminalView.postColoredLine(getString(R.string.deal_error),Color.RED,true,true);
+                        _terminalView.postColoredLine(getString(R.string.deal_error),Color.RED,true,SYSTEM_PREFIX);
                         _terminalView.setPrefix(ROOT_PREFIX);
                         regUser();
                     }
@@ -635,16 +649,13 @@ public class MainAct extends AppCompatActivity {
                     _curUser.update();
                     _state = State.MATCH_USER;
 
-                    _terminalView.setPrefix(SYSTEM_PREFIX);
-                    _terminalView.postColoredLine(getString(R.string.reg_successful),Color.RED,true,true);
-                    _terminalView.setPrefix(SYSTEM_PREFIX);
-                    _terminalView.postColoredLine(getString(R.string.matching_user),Color.RED,true,true);
+                    _terminalView.postColoredLine(getString(R.string.reg_successful),Color.RED,true,SYSTEM_PREFIX);
+                    _terminalView.postColoredLine(getString(R.string.matching_user),Color.RED,true,SYSTEM_PREFIX);
                     _terminalView.setPrefix(ROOT_PREFIX);
                     getRandomUser();
 
                 } else {
-                    _terminalView.setPrefix(SYSTEM_PREFIX);
-                    _terminalView.postColoredLine(e.toString(),Color.RED,true,true);
+                    _terminalView.postColoredLine(e.toString(),Color.RED,true,SYSTEM_PREFIX);
                     _terminalView.setPrefix(ROOT_PREFIX);
                 }
             }
