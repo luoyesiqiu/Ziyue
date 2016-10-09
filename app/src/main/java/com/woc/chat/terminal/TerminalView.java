@@ -17,7 +17,7 @@ import android.widget.EditText;
 
 public class TerminalView extends EditText {
     public static final int STEP_MILLS = 100;
-    public static final String PREFIX = "";
+    public static final String PREFIX = ">";
 
     private volatile CharSequence mPrefix = PREFIX;
     private volatile CharSequence mCurrentPrefix = PREFIX;
@@ -75,11 +75,8 @@ public class TerminalView extends EditText {
     private OnKeyListener mOnKeyListener = new OnKeyListener() {
         @Override
         public boolean onKey(View v, int keyCode, KeyEvent event) {
-            if (!mEditable)
-                return true;
-
             if (keyCode == KeyEvent.KEYCODE_ENTER) {
-                if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (mEditable && event.getAction() == KeyEvent.ACTION_UP) {
                     if (!mController.skip()) {
                         Editable text = getText();
                         mLastSubmission = text.subSequence(mLastEditablePosition, text.length());
@@ -121,8 +118,11 @@ public class TerminalView extends EditText {
         mController = new Controller(this);
         mController.start();
 
-        mLastEditablePosition = mPrefix.length();
-        setText(SpannableString.valueOf(mPrefix));
+        startWaiting();
+
+        //mLastEditablePosition = mPrefix.length();
+        mLastEditablePosition = 0;
+        //setText(SpannableString.valueOf(mPrefix));
 
         setFilters(new InputFilter[]{mInputFilter});
         setOnKeyListener(mOnKeyListener);
@@ -271,13 +271,13 @@ public class TerminalView extends EditText {
         }
     }
 
-    public void startWaiting() {
+    private void startWaiting() {
         mWaiting = true;
         mShouldBeEditableAfterWaiting = mEditable;
         mEditable = false;
     }
 
-    public void stopWaiting() {
+    private void stopWaiting() {
         mWaiting = false;
         mEditable = mShouldBeEditableAfterWaiting;
     }
