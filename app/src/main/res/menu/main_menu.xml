@@ -3,10 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     >
     <group>
-    <item app:showAsAction="never"
-        android:id="@+id/menu_rematch"
-        android:title="重新匹配">
-    </item>
+        <item app:showAsAction="never"
+            android:id="@+id/menu_rematch"
+            android:title="重新匹配">
+        </item>
     <item app:showAsAction="never"
         android:id="@+id/menu_setting"
         android:title="设置">
@@ -16,8 +16,9 @@
         android:title="帮助">
     </item>
     </group>
-    <item app:showAsAction="always"
-        android:id="@+id/menu_select"
-        android:title="select">
+
+    <item app:showAsAction="never"
+        android:id="@+id/menu_donate"
+        android:title="投食">
     </item>
 </menu>

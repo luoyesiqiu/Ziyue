@@ -23,10 +23,11 @@
         android:orientation="horizontal"
             android:weightSum="10"
         >
-        <EditText
+        <com.woc.chat.emoji.EmojiconEditText
             android:layout_weight="9.2"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_marginBottom="5dp"
             android:background="@drawable/edittext_style"
             android:maxLines="2"
             android:id="@+id/edit_msg"

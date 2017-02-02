@@ -4,12 +4,14 @@
     android:gravity="left"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-    <TextView
+    <com.woc.chat.emoji.EmojiconMultiAutoCompleteTextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="left|top"
+        android:textIsSelectable="false"
         android:layout_margin="5dp"
-        android:text="左边的消息"
+        android:text="ABC"
+        android:textAppearance="?android:textAppearanceSmall"
         android:textColor="#ffffffff"
         android:background="#ff000000"
         android:id="@+id/tv_chat_msg"/>

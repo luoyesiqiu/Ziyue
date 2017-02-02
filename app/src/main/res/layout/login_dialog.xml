@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical">
+<TextView
+    android:layout_width="match_parent"
+    android:text="@string/title_login_and_register"
+    android:layout_margin="20dp"
+    android:textColor="#00ff00"
+    android:textAppearance="?android:textAppearanceLarge"
+    android:layout_height="wrap_content" />
+    <android.support.design.widget.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:textColorHint="#ffffff"
+        android:id="@+id/view1" >
+    <EditText
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:layout_width="match_parent"
+        android:singleLine="true"
+        android:inputType="text"
+        android:hint="用户名"
+        android:textColor="#00ff00"
+        android:id="@+id/tb_username"
+        android:layout_marginLeft="10dp"
+        android:layout_marginRight="10dp"/>
+</android.support.design.widget.TextInputLayout>
+    <android.support.design.widget.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:textColorHint="#ffffff"
+        android:id="@+id/view2" >
+    <EditText
+        android:layout_height="wrap_content"
+        android:ems="10"
+        android:hint="密码"
+        android:textColor="#00ff00"
+        android:layout_width="match_parent"
+        android:singleLine="true"
+        android:inputType="textPassword"
+        android:id="@+id/tb_pwd"
+        android:layout_marginLeft="10dp"
+        android:layout_marginRight="10dp"/>
+</android.support.design.widget.TextInputLayout>
+</LinearLayout>

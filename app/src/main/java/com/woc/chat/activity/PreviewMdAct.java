@@ -2,6 +2,7 @@ package com.woc.chat.activity;
 
 import android.app.*;
 import android.content.*;
+import android.graphics.Color;
 import android.os.*;
 import android.support.v7.app.AppCompatActivity;
 import android.webkit.*;
@@ -12,6 +13,7 @@ import android.widget.*;
 
 import com.woc.chat.R;
 import com.woc.chat.util.IO;
+import com.woc.chat.util.StatusBar;
 import com.woc.chat.view.MdWebView;
 
 public class PreviewMdAct extends AppCompatActivity
@@ -49,14 +51,7 @@ implements OnGestureListener,OnTouchListener
 		detector = new GestureDetector(this, this);
 		getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 		//沉浸状态栏
-//		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT)
-//		{
-//			Window window = getWindow();
-//			// 透明状态栏
-//			window.setFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS,
-//							WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-//			window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
-//		}
+		StatusBar.setColor(this, Color.parseColor("#303F9F"));
 	}
 	
 	@Override

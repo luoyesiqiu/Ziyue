@@ -3,6 +3,7 @@
     <PreferenceCategory android:title="基本设置" >
         <CheckBoxPreference
             android:key="checkbox_receive_msg"
+            android:defaultValue="true"
             android:summary="当你选择不接收任何命令，你也发送不了任何命令"
             android:title="不接收任何命令" />
     </PreferenceCategory>

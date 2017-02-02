@@ -22,10 +22,18 @@ public class ChatItem {
         this.itemType = itemType;
     }
 
-    public ChatItem(String msg, int itemType,boolean slow) {
+
+    /**
+     *
+     * @param msg
+     * @param itemType
+     * @param slow
+     */
+    public ChatItem(String msg, int itemType,boolean slow,boolean isHtml) {
         this.msg = msg;
         this.itemType = itemType;
         this.slow=slow;
+        this.isHtml=isHtml;
     }
 
     private  String msg;
@@ -39,5 +47,14 @@ public class ChatItem {
         this.slow = slow;
     }
 
+    public boolean isHtml() {
+        return isHtml;
+    }
+
+    public void setHtml(boolean html) {
+        isHtml = html;
+    }
+
+    private   boolean isHtml;
     private  boolean slow;//是否慢点打字
 }

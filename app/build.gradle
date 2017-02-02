@@ -8,14 +8,19 @@ android {
         applicationId "com.woc.chat"
         minSdkVersion 15
         targetSdkVersion 23
-        versionCode 2
-        versionName "16.10.2.1"
+        versionCode 12
+        versionName "17.1.6.2"
         /*ndk {
             moduleName "data"          //生成的so名字
         }*/
     }
     buildTypes {
         release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            shrinkResources true
+        }
+        debug {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -23,7 +28,7 @@ android {
     useLibrary 'org.apache.http.legacy'
     sourceSets {
         main {
-            jniLibs.srcDirs = ['src/main/libs']//将so文件目录指向libs目录
+           //jniLibs.srcDirs = ['src/main/libs']//将so文件目录指向libs目录
         }
     }
 
@@ -34,11 +39,18 @@ dependencies {
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:23.0.0'
     compile 'com.android.support:recyclerview-v7:23.0.0'
-    compile files('src/main/libs/BmobSDK_3.5.1_20160719.jar')
-    compile files('src/main/libs/rxjava-1.1.6.jar')
-    compile files('src/main/libs/gson-2.6.2.jar')
-    compile files('src/main/libs/okhttp-3.3.1.jar')
-    compile files('src/main/libs/okio-1.7.0.jar')
-    compile files('src/main/libs/rxandroid-1.2.0.jar')
     compile files('src/main/libs/markdownpapers-core-1.4.1.jar')
+    compile files('src/main/libs/tulingSDK1.4.jar')
+    compile files('src/main/libs/turinghttp_1.0.jar')
+    compile files('src/main/libs/volley.jar')
+    compile files('src/main/libs/okhttp-3.3.1.jar')
+    compile files('src/main/libs/smack-core-4.1.9.jar')
+    compile files('src/main/libs/smack-im-4.1.9.jar')
+    compile files('src/main/libs/smack-tcp-4.1.9.jar')
+    compile files('src/main/libs/smack-extensions-4.1.9.jar')
+    compile files('src/main/libs/okio-1.7.0.jar')
+    compile files('src/main/libs/jxmpp-core-0.5.0-alpha7.jar')
+    compile files('src/main/libs/jxmpp-util-cache-0.5.0-alpha7.jar')
+    compile files('src/main/libs/smack-android-4.1.9.jar')
+    compile 'com.android.support:design:23.0.0'
 }

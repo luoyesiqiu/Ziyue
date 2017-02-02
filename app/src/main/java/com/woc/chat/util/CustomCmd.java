@@ -1,15 +1,21 @@
 package com.woc.chat.util;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
+import android.os.Environment;
 import android.os.Vibrator;
 
-import com.woc.chat.entity.User;
+import com.woc.chat.adapter.ChatAdapter;
+import com.woc.chat.entity.ChatItem;
 
-import cn.bmob.v3.exception.BmobException;
-import cn.bmob.v3.listener.UpdateListener;
+import java.io.File;
+import java.util.List;
+import java.util.Set;
+
+//import jackpal.term.Term;
 
 /**
  * Created by zyw on 2016/9/21.
@@ -22,10 +28,13 @@ public class CustomCmd {
     private static  final  String PLAY="play";
     private static  final String SIGN="sign";
     private static  final String VERSION="version";
+    private static  final String CLEAR="clear";
+    private static  final  String TERM="term";
+    private static final String EXPORT="export";
     private static String[] remoteCmdTable ={VIBRATE,PLAY,VERSION};
-    private static String[] localCmdTable ={SIGN};
+    private static String[] localCmdTable ={SIGN,CLEAR,TERM,EXPORT};
     private static String signMsg="更改签名成功";
-
+    private static String SD_PATH= Environment.getExternalStorageDirectory().getAbsolutePath();
     /**
      * 让本地运行命令
      * @param context
@@ -33,7 +42,7 @@ public class CustomCmd {
      * @param cmd
      * @return
      */
-    public static  String runLocalCmd(Context context,User user,String cmd)
+    public static  String runLocalCmd(Context context,String user,String cmd,ChatAdapter chatAdapter)
     {
         String[] cmds=cmd.split("\\s+");
         String msg=null;
@@ -48,18 +57,53 @@ public class CustomCmd {
                 }
                 msg=setSign(user,cmds[1]);
                 break;
+
+            case CLEAR:
+                msg=clearList(context,chatAdapter);
+                break;
+
+            case TERM:
+                msg=runTerm(context);
+                break;
+            case EXPORT:
+                msg=exportMsg(SD_PATH+File.separator+cmds[1],chatAdapter);
         }
         return msg;
     }
 
 
+    public static  String exportMsg(String path,ChatAdapter chatAdapter)
+    {
+        StringBuilder sb=new StringBuilder();
+        List<ChatItem> list=chatAdapter.getList();
+        for(int i=0;i<list.size();i++)
+            sb.append(list.get(i).getMsg()+"\n");
+        String msg=IO.writeFile(new File(path),sb.toString());
+        if(msg==null)
+            return  "聊天记录导出成功,目录："+path;
+        return msg;
+    }
+
+    /**
+     * 启动终端模拟器
+     * @param context
+     * @return
+     */
+    public  static  String runTerm(Context context)
+    {
+
+//        Intent intent=new Intent(context,Term.class);
+//        context.startActivity(intent);
+
+        return  "启动终端成功";
+    }
     /**
      * 让远程运行命令
      * @param context
      * @param cmd
      * @return
      */
-    public static  String runRemoteCmd(Context context,User user,String cmd)
+    public static  String runRemoteCmd(Context context,String user,String cmd,ChatAdapter chatAdapter)
     {
         String[] cmds=cmd.split("\\s+");
         String msg=null;
@@ -121,28 +165,33 @@ public class CustomCmd {
             return "Unknown";
         }
     }
-
+    /**
+     *
+     * @param context
+     * @return
+     */
+    private static String clearList(Context context, ChatAdapter chatAdapter)
+    {
+        List<ChatItem> list=chatAdapter.getList();
+        Set<Integer> set=chatAdapter.getSet();
+        list.clear();
+        set.clear();
+        chatAdapter.notifyDataSetChanged();
+        return "消息已清除";
+    }
     /**
      * 设置签名
      * @param user
      * @param signString
      * @return
      */
-    private static String setSign(User user, final String signString)
+    private static String setSign(String user, final String signString)
     {
-        user.setSign(signString);
-        user.update(new UpdateListener() {
-            @Override
-            public void done(BmobException e) {
-                if(e==null)
-                {
-                    signMsg="更改签名成功";
-                }else
-                {
-                    signMsg="更改签名失败:"+e.toString();
-                }
-            }
-        });
+        if(signString.length()>30)
+        {
+            return "签名长度不能大于30个字符";
+        }
+
         return signMsg;
     }
 

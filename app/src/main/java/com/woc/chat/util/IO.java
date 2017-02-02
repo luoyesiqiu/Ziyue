@@ -3,6 +3,7 @@ import java.io.*;
 import org.tautua.markdownpapers.*;
 import org.tautua.markdownpapers.parser.*;
 import android.content.*;
+import android.content.res.AssetManager;
 
 public class IO
 {
@@ -32,6 +33,25 @@ public class IO
 		return result.toString();
     }
 
+	/**
+	 *
+	 * @param context
+	 * @param path
+     * @return
+     */
+	public  static  InputStream getInputSteamFromAssets(Context context,String path)
+	{
+		AssetManager assetManager=context.getAssets();
+		InputStream inputStream=null;
+		try {
+			inputStream=assetManager.open(path);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		return inputStream;
+
+	}
 	/**
 	 * 读取文件
 	 * @param file
@@ -77,9 +97,10 @@ public class IO
 	 * @param file
 	 * @param data
      */
-	public static void writeFile(File file, String data)
+	public static String writeFile(File file, String data)
 	{
 		BufferedWriter bw=null;
+		String msg=null;
 		try
 		{
 			bw = new BufferedWriter(new FileWriter(file));
@@ -87,7 +108,9 @@ public class IO
 			bw.flush();
 		}
 		catch (IOException e)
-		{}
+		{
+			msg=e.toString();
+		}
 		finally
 		{
 			try
@@ -95,8 +118,11 @@ public class IO
 				bw.close();
 			}
 			catch (IOException e)
-			{}
+			{
+				msg=e.toString();
+			}
 		}
+		return msg;
 	}
 
 	/**
