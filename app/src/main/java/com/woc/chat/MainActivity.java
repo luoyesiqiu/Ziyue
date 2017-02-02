@@ -18,7 +18,6 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
-import android.text.Html;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -403,15 +402,27 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     if(_state==State.MATCH_USER) {
-                        _state = State.CHATTING_TO_ROBOT;
-                        _friendName="robot";
+                        _smackTool.requireQuitMatchUser(new SmackResultCallback() {
+                            @Override
+                            public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
+                                if(isOK)//正常退出才能匹配机器人
+                                {
+                                    _state = State.CHATTING_TO_ROBOT;
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            _buttonSend.setEnabled(true);
+                                            _items.add(new ChatItem(getString(R.string.match_successful), ChatAdapter.TYPE_SYSTEM_MSG, true,false));
+                                            _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, true,false));
+                                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                        }
+                                    });
 
-                        _buttonSend.setEnabled(true);
-                        _items.add(new ChatItem("匹配用户成功，现在可以开始聊天啦", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                        _items.add(new ChatItem("对方没有设置签名", ChatAdapter.TYPE_STRANGER_SIGN, true,false));
-                        //_adapter.notifyDataSetChanged();
-                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                }
+                            }
+                        });
+
                     }
                 }
             });
@@ -508,6 +519,9 @@ public class MainActivity extends AppCompatActivity {
                         String cmdBody=message.getBody(ConstantPool.MESSAGE_TYPE_CMD);//cmd命令
                         String cmdResult=message.getBody(ConstantPool.MESSAGE_TYPE_CMD_RESULT);
                         String systemMsg=message.getBody(ConstantPool.MESSAGE_TYPE_SYSTEM);
+                        //不处理乱来的消息
+                        if(_state!=State.CHATTING_TO_PERSON)
+                            return;
                         if(mainBody==null&&cmdBody==null&&cmdResult==null&&systemMsg==null)
                             return;
 
@@ -610,7 +624,7 @@ public class MainActivity extends AppCompatActivity {
                     if(msgType.equals(ConstantPool.MATCH_SUCCESS_SERVER))//服务器发来的匹配成功消息
                     {
                                 _friendId=data;
-                                final String jid=_sharedPreferences.getString("username","")+"@"+ConstantPool.LOCAL_HOST2;
+                                final String jid=_sharedPreferences.getString("username","")+"@"+ConstantPool.LOCAL_HOST_WORD;
                                 //发送给对方
                                 _smackTool.sendMatchSuccess(_friendId,jid, new SmackResultCallback() {
                                     @Override

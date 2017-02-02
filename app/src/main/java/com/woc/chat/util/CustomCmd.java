@@ -1,13 +1,13 @@
 package com.woc.chat.util;
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
 import android.os.Environment;
 import android.os.Vibrator;
 
+import com.woc.chat.R;
 import com.woc.chat.adapter.ChatAdapter;
 import com.woc.chat.entity.ChatItem;
 
@@ -66,18 +66,59 @@ public class CustomCmd {
                 msg=runTerm(context);
                 break;
             case EXPORT:
-                msg=exportMsg(SD_PATH+File.separator+cmds[1],chatAdapter);
+                msg=exportMsg(context,SD_PATH+File.separator+cmds[1],chatAdapter);
         }
         return msg;
     }
 
 
-    public static  String exportMsg(String path,ChatAdapter chatAdapter)
+    public static  String exportMsg(Context context,String path,ChatAdapter chatAdapter)
     {
         StringBuilder sb=new StringBuilder();
-        List<ChatItem> list=chatAdapter.getList();
-        for(int i=0;i<list.size();i++)
-            sb.append(list.get(i).getMsg()+"\n");
+        List<ChatItem> chatMsgList=chatAdapter.getChatMsgList();
+        List<String> prefixList=chatAdapter.getPrefixList();
+        List<Integer> typeList=chatAdapter.getTypeList();
+        if(chatMsgList.size()!=prefixList.size()||chatMsgList.size()!=typeList.size())
+            return  "聊天记录导出失败";
+        sb.append("<html>\n<head>\n");
+        sb.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n");
+        sb.append("<style type=\"text/css\">\n");
+        sb.append("body{background-color:black}");
+        sb.append("</style>\n");
+        sb.append("</head>\n");
+        sb.append("<title>");
+        sb.append(context.getString(R.string.app_name));
+        sb.append("</title>\n");
+        sb.append("<body>\n");
+        for(int i=0;i<chatMsgList.size();i++) {
+            int type=typeList.get(i);
+            String prefix=prefixList.get(i);
+            switch (type)
+            {
+                case ChatAdapter.TYPE_MYSELF_MSG:
+                    sb.append( "<font color='white'>"+prefix+ chatMsgList.get(i).getMsg() + "</font></br>\n");
+                    break;
+                case ChatAdapter.TYPE_STRANGER_SIGN:
+                    sb.append( "<font color='#ff69b4'>"+prefix+ chatMsgList.get(i).getMsg() + "</font></br>\n");
+                    break;
+                case ChatAdapter.TYPE_STRANGER_MSG:
+                    sb.append( "<font color='green'>"+prefix+ chatMsgList.get(i).getMsg() + "</font></br>\n");
+                    break;
+                case ChatAdapter.TYPE_SYSTEM_MSG:
+                    sb.append( "<font color='red'>"+prefix+ chatMsgList.get(i).getMsg() + "</font></br>\n");
+                    break;
+                case ChatAdapter.TYPE_STRANGER_RESULT:
+                    sb.append( "<font color='#ffd500'>"+prefix+ chatMsgList.get(i).getMsg() + "</font></br>\n");
+                    break;
+                default:
+                    sb.append( prefix+ chatMsgList.get(i).getMsg() + "\n");
+
+                    break;
+            }
+
+        }
+        sb.append("</body>");
+        sb.append("</html>");
         String msg=IO.writeFile(new File(path),sb.toString());
         if(msg==null)
             return  "聊天记录导出成功,目录："+path;
@@ -172,7 +213,7 @@ public class CustomCmd {
      */
     private static String clearList(Context context, ChatAdapter chatAdapter)
     {
-        List<ChatItem> list=chatAdapter.getList();
+        List<ChatItem> list=chatAdapter.getChatMsgList();
         Set<Integer> set=chatAdapter.getSet();
         list.clear();
         set.clear();
@@ -187,9 +228,9 @@ public class CustomCmd {
      */
     private static String setSign(String user, final String signString)
     {
-        if(signString.length()>30)
+        if(signString.length()>100)
         {
-            return "签名长度不能大于30个字符";
+            return "签名长度不能大于100个字符";
         }
 
         return signMsg;

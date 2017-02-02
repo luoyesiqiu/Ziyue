@@ -19,12 +19,10 @@ public class ConstantPool {
     public static  final String MESSAGE_TYPE_SYSTEM="system_msg";
     public static  final  String INFO_NAMESPACE="match:iq:info";
     public static  final  String DATA_TYPE_NIL="nil";
-    public static  final  String LOCAL_HOST1="127.0.0.1";
-    public static  final  String LOCAL_HOST2="localhost";
+    public static  final  String LOCAL_HOST_IP ="127.0.0.1";
+    public static  final  String LOCAL_HOST_WORD ="localhost";
     public static  final  String REMOTE_HOST="58";
     public static  final  String TEST_HOST="172.24.219.1";
-    public static  final  String TEST_User1="zyw@localhost";
-    public static  final  String TEST_User2="zyw8@localhost";
     public static  final  int REMOTE_PORT=5222;
     public static final String TURING_API_KEY = "16e274e0cb6749f0b61e6a742d101737";
     public static final  String turnUrl="http://www.tuling123.com/openapi/api";
