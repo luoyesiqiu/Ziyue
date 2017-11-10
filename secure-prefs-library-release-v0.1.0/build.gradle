@@ -1,0 +1,5 @@
+configurations.maybeCreate("default")
+artifacts.add("default", file('secure-prefs-library-release-v0.1.0.aar'))
+
+dependencies {
+}

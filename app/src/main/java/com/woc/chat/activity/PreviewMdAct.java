@@ -11,16 +11,15 @@ import android.view.GestureDetector.*;
 import android.view.*;
 import android.widget.*;
 
+import com.woc.chat.MainActivity;
 import com.woc.chat.R;
 import com.woc.chat.util.IO;
 import com.woc.chat.util.StatusBar;
 import com.woc.chat.view.MdWebView;
 
 public class PreviewMdAct extends AppCompatActivity
-implements OnGestureListener,OnTouchListener
 {
-	private GestureDetector detector;
-	MdWebView wv;
+	private  MdWebView wv;
 	@Override
 	protected void onCreate(Bundle savedInstanceState)
 	{
@@ -34,7 +33,6 @@ implements OnGestureListener,OnTouchListener
 		String data=intent.getStringExtra("data");
 		String title=intent.getStringExtra("title");
 		setTitle(title);
-		wv.setOnTouchListener(this);
 		StringBuilder sb=new StringBuilder();
 		sb.append("<html>\n<head>\n\n");
 		sb.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n");
@@ -47,73 +45,12 @@ implements OnGestureListener,OnTouchListener
 		sb.append("\n</body>\n");
 		sb.append("</html>");
 		wv.loadData(sb.toString());
-		
-		detector = new GestureDetector(this, this);
+
 		getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 		//沉浸状态栏
 		StatusBar.setColor(this, Color.parseColor("#303F9F"));
 	}
-	
-	@Override
-	public boolean onDown(MotionEvent p1)
-	{
-		// TODO: Implement this method
-		return false;
-	}
 
-	@Override
-	public void onShowPress(MotionEvent p1)
-	{
-		// TODO: Implement this method
-	}
-
-	@Override
-	public boolean onSingleTapUp(MotionEvent p1)
-	{
-		// TODO: Implement this method
-		return false;
-	}
-
-	@Override
-	public boolean onScroll(MotionEvent p1, MotionEvent p2, float dex, float dey)
-	{
-		// TODO: Implement this method
-		//支持左滑关闭窗口
-		if((-dex)>50&&Math.abs(dey)<Math.abs(dex))
-			finish();
-				
-		return true;
-	}
-
-	@Override
-	public void onLongPress(MotionEvent p1)
-	{
-		// TODO: Implement this method
-	}
-
-	@Override
-	public boolean onFling(MotionEvent p1, MotionEvent p2, float p3, float p4)
-	{
-		// TODO: Implement this method
-
-		return false;
-	}
-
-	@Override
-	public boolean onTouchEvent(MotionEvent event)
-	{
-		// TODO: Implement this method
-		return detector.onTouchEvent(event);
-	}
-
-	@Override
-	public boolean onTouch(View p1, MotionEvent p2)
-	{
-		// TODO: Implement this method
-		detector.onTouchEvent(p2);
-		//返回假很重要
-		return false;
-	}
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {

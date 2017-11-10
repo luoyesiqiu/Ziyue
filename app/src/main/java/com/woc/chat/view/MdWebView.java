@@ -10,7 +10,8 @@ public class MdWebView extends WebView
 
 {
 	Context context;
-	
+
+	String baseUrl = "file:///android_asset/";
 	public MdWebView(Context context)
 	{
 		
@@ -29,7 +30,7 @@ public class MdWebView extends WebView
 	}
 	public void loadData(String data)
 	{
-		loadData(data,"text/html;charset=UTF-8",null);
+		loadDataWithBaseURL(baseUrl,data,"text/html","UTF-8",null);
 		//Toast.makeText(context,"滑动",5000).show();
 	}
 	

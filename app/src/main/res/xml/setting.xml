@@ -4,7 +4,19 @@
         <CheckBoxPreference
             android:key="checkbox_receive_msg"
             android:defaultValue="true"
-            android:summary="当你选择不接收任何命令，你也发送不了任何命令"
-            android:title="不接收任何命令" />
+            android:title="不接收任何命令"
+            android:summary="当你选择不接收任何命令，你也发送不了任何命令" />
+
+        <CheckBoxPreference
+            android:key="checkbox_less_cmd_line"
+            android:defaultValue="false"
+            android:title="提示尽量不以文本显示"
+            android:summary="当你勾选此选项，各种提示将不在聊天列表里显示，而是以非文本方式" />
+
+        <CheckBoxPreference
+            android:key="checkbox_no_match_robot"
+            android:defaultValue="true"
+            android:title="不匹配聊天机器人"
+            android:summary="当你勾选此选项，将不会匹配到聊天机器人" />
     </PreferenceCategory>
 </PreferenceScreen>

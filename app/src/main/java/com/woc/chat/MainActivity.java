@@ -1,24 +1,36 @@
 package com.woc.chat;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.ProgressDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
+import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.NotificationCompat;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -30,12 +42,14 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.securepreferences.SecurePreferences;
 import com.woc.chat.activity.PreviewMdAct;
 import com.woc.chat.adapter.ChatAdapter;
 import com.woc.chat.entity.ChatItem;
 import com.woc.chat.activity.SettingActivity;
 import com.woc.chat.interfaces.OnReceiveNonChatMsg;
 import com.woc.chat.interfaces.SmackResultCallback;
+import com.woc.chat.service.MsgNotifyService;
 import com.woc.chat.util.ConstantPool;
 import com.woc.chat.util.CustomCmd;
 import com.woc.chat.util.MessageTool;
@@ -44,11 +58,16 @@ import com.woc.chat.util.IO;
 import com.woc.chat.util.SmackTool;
 import com.woc.chat.util.StatusBar;
 
+import org.jivesoftware.smack.SmackException;
+import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.chat.Chat;
 import org.jivesoftware.smack.chat.ChatManager;
 import org.jivesoftware.smack.chat.ChatMessageListener;
 import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.tcp.XMPPTCPConnection;
+import org.jivesoftware.smackx.iqregister.AccountManager;
+import org.jivesoftware.smackx.vcardtemp.VCardManager;
+import org.jivesoftware.smackx.vcardtemp.packet.VCard;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -69,45 +88,82 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final int REQUEST_CODE_WRITE_STORAGE = 100;
     private RecyclerView _recyclerView;
     private ChatAdapter _adapter;
     private List<ChatItem> _items;
-    private String _friendName;
     private String _friendId;
     private EditText _editMsg;
     private Button _buttonSend;
-    private SharedPreferences _sharedPreferences;
+    private SecurePreferences _sharedPreferences;
     public static Activity thiz;
     private State _state;
     private boolean _canSend = true;//标记是否能发送
     private  ClipboardManager _clipboard;
-    private static ChatManager chatManager;
     private SharedPreferences _settingPreferences;
     private  boolean _isBackground =false;
     private  PendingIntent _pendingIntent;
     private final int NOTIFY_ID=1;
     private Request request;
-    private  String userId;
     private OkHttpClient okHttpClient;
     private Headers.Builder headerBuilder;
     private okhttp3.Call call;
-    private final int waitTime=20*1000;
+    private final int WAIT_TIME =20*1000;
     private SmackTool _smackTool;
     private AlertDialog alertDialog;
-
+    private PendingIntent _hangPendingIntent;
+    private Intent _hangIntent;
+    private Timer _timer;
+    private String userId;//机器人识别的用户id
+    private ProgressDialog progressDialog;
     public enum State {
+        INIT,
         MATCH_USER,//匹配用户
         CHATTING_TO_PERSON,//与人聊天中
         CHATTING_TO_ROBOT//与机器人聊天中
     }
     private NotificationManager _notificationManager;
-    private  WaitTask waitTask=new WaitTask();
     private final  String userRegex="[A-Za-z0-9]{3,20}";
+    private  MsgNotifyService msgNotifyService;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        if(Build.VERSION.SDK_INT>=23)
+        {
+            requestPermission();
+        }
         init();
+    }
+    private void requestPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            //申请 WRITE_EXTERNAL_STORAGE 权限
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_CODE_WRITE_STORAGE);
+        }
+    }
+    /**
+     * 监听Activity与Service关联情况
+     */
+    ServiceConnection serviceConnection=new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            MsgNotifyService.SimpleBinder simpleBinder=(MsgNotifyService.SimpleBinder) service;
+            msgNotifyService=simpleBinder.getService();
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            //不连接
+
+        }
+    };
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+
     }
 
     /**
@@ -126,11 +182,11 @@ public class MainActivity extends AppCompatActivity {
         _recyclerView.setAdapter(_adapter);
         _adapter.notifyDataSetChanged();
         _buttonSend.setOnClickListener(new ClickEvents());
-
+        _buttonSend.setEnabled(false);
+        _state=State.INIT;
         _editMsg.setOnClickListener(new ClickEvents());
         StatusBar.setColor(this, Color.parseColor("#303F9F"));
-        _sharedPreferences = getSharedPreferences("user", Context.MODE_PRIVATE);
-
+        _sharedPreferences=new SecurePreferences(this,ConstantPool.DATA_TYPE_NIL,"data");
         _clipboard = (ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
         //设置长按事件
         _adapter.setOnItemLongClickListener(new ChatAdapter.OnRecyclerViewItemLongClickListener() {
@@ -140,22 +196,29 @@ public class MainActivity extends AppCompatActivity {
                 String text = _items.get(pos).getMsg();
                 myClip = ClipData.newPlainText("text", text);
                 _clipboard.setPrimaryClip(myClip);
-                _items.add(new ChatItem("文本已复制到剪贴板", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                _recyclerView.scrollToPosition(_items.size() - 1);
+                if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                    _items.add(new ChatItem("文本已复制到剪贴板", ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                    _recyclerView.scrollToPosition(_items.size() - 1);
+                }else
+                {
+                    showToast("文本已复制到剪贴板");
+                }
 
             }
         });
         _settingPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         _notificationManager =(NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
-        _pendingIntent = PendingIntent.getActivity(MainActivity.this, NOTIFY_ID,  new Intent(MainActivity.this, MainActivity.class), 0);
+        _pendingIntent = PendingIntent.getActivity(MainActivity.this, 0,  new Intent(MainActivity.this, MainActivity.class), 0);
+        _hangIntent = new Intent(this, MainActivity.class);
+        _hangIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        //如果描述的PendingIntent已经存在，则在产生新的Intent之前会先取消掉当前的
+        _hangPendingIntent = PendingIntent.getActivity(this, 0, _hangIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
         okHttpClient=new OkHttpClient();
         headerBuilder=new Headers.Builder();
-        _smackTool=new SmackTool(this);
+        _smackTool=SmackTool.getInstance(this);
 
-        Timer timer=new Timer();
-        timer.schedule(waitTask,waitTime);
 
         if(TextUtils.isEmpty(_sharedPreferences.getString("username",""))||TextUtils.isEmpty(_sharedPreferences.getString("pwd","")))
         {
@@ -169,22 +232,31 @@ public class MainActivity extends AppCompatActivity {
      */
     private  void connectAndLogin(final String username, final String pwd)
     {
-        _smackTool.connect(ConstantPool.TEST_HOST, ConstantPool.REMOTE_PORT, new SmackResultCallback() {
+        if(_settingPreferences.getBoolean("checkbox_less_cmd_line",false))
+        {
+            showProgressBar(getString(R.string.connect_ing));
+        }
+        _smackTool.connect(new SmackResultCallback() {
             @Override
             public void onReceive(XMPPTCPConnection connection,final String msg, final boolean isOK) {
 
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                       // _items.add(new ChatItem("<font color='blue'>大家好才是真的好</font>", ChatAdapter.TYPE_SYSTEM_MSG, false,true));
-                    _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                    _recyclerView.scrollToPosition(_items.size() - 1);
+                        if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                            _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                            _recyclerView.scrollToPosition(_items.size() - 1);
+                        }else
+                        {
+                            if(progressDialog!=null)
+                                progressDialog.dismiss();
+                        }
                     }
                 });
                 if(isOK)
                 {
-                    login(username,pwd);
+                    loginAndMatchUser(username,pwd);
                 }
             }
         });//connect
@@ -195,28 +267,52 @@ public class MainActivity extends AppCompatActivity {
      * @param username
      * @param pwd
      */
-    private  void  login(String username,String pwd)
+    private  void loginAndMatchUser(String username, String pwd)
     {
+        if(_settingPreferences.getBoolean("checkbox_less_cmd_line",false))
+        {
+            showProgressBar(getString(R.string.login_ing));
+        }
         _smackTool.login(username, pwd, new SmackResultCallback() {
             @Override
-            public void onReceive(XMPPTCPConnection connection, final String msg, final boolean isOK) {
+            public void onReceive(final XMPPTCPConnection connection, final String msg, final boolean isOK) {
 
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                        _recyclerView.scrollToPosition(_items.size() - 1);
-                        if(isOK) {
-                            _items.add(new ChatItem(getString(R.string.matching_user), ChatAdapter.TYPE_SYSTEM_MSG, true,false));
+                        if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                            _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true, false));
                             _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
                             _recyclerView.scrollToPosition(_items.size() - 1);
+                        }else
+                        {
+                            if(progressDialog!=null)
+                            progressDialog.dismiss();
+                            showToast(msg);
+                        }
+                        if(isOK) {
+                            if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                _items.add(new ChatItem(getString(R.string.matching_user), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                _recyclerView.scrollToPosition(_items.size() - 1);
+                            }
+                            else
+                            {
+                                showProgressBar(getString(R.string.matching_user));
+                                showToast(msg);
+                            }
+                           // _smackTool.deleteOfflineMsg();//删除聊天记录
+                            userId=connection.getUser();//机器人识别的用户id
+                            if(!_settingPreferences.getBoolean("checkbox_no_match_robot",true)) {
+                                _timer = new Timer();
+                                _timer.schedule(new WaitTask(), WAIT_TIME);
+                            }
                             matchUser();
                         }
                     }
                 });
             }
-        });//login
+        });//loginAndMatchUser
     }
 
     /**
@@ -229,13 +325,13 @@ public class MainActivity extends AppCompatActivity {
         _smackTool.requireMatchUser(new SmackResultCallback() {
             @Override
             public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
-                System.out.println("--------------->"+msg);
+                System.out.println("--------------->"+isOK+","+msg);
                 if(isOK)
                 {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            startListenMsg();
+                            startListenNonChatMsg();
                         }
                     });
                 }
@@ -243,22 +339,42 @@ public class MainActivity extends AppCompatActivity {
         });//requireMatchUser
     }
 
-
     /**
      * 重新匹配
      */
     private  void rematchUser()
     {
-        _state=State.MATCH_USER;
-        _buttonSend.setEnabled(false);
-        _smackTool.requireMatchUser(null);//requireMatchUser
+        if(_state==State.MATCH_USER)
+            return;
+
+        _smackTool.sendQuitChat(_friendId, new SmackResultCallback() {
+            @Override
+            public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
+                log("------------------->"+msg);
+                if(isOK) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            _state = State.MATCH_USER;
+                            _smackTool.requireMatchUser(null);//requireMatchUser
+                            _buttonSend.setEnabled(false);
+
+                        }
+                    });
+                }else
+                {
+                    log("------------------>"+msg);
+                }
+            }
+        });
+
     }
     /**
      * 显示对话框
      */
     private  String userTemp="";
     private  String pwdTemp="";
-    private void showLoginAndRegisterDialog()
+    public  void showLoginAndRegisterDialog()
     {
         View view= LayoutInflater.from(this).inflate(R.layout.login_dialog,null);
         final EditText userNameView=(EditText) view.findViewById(R.id.tb_username);
@@ -294,20 +410,52 @@ public class MainActivity extends AppCompatActivity {
                             /**
                              * 注册
                              */
-                            _smackTool.register(userTemp, pwdTemp, new HashMap<String, String>(), new SmackResultCallback() {
-                                @Override
-                                public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
-                                    if(isOK)
-                                    {
-                                        //注册成功
-                                    }else
-                                    {
-                                        //注册失败
-                                        showToast(getString(R.string.register_fail));
-                                        showLoginAndRegisterDialog();
-                                    }
+                            if(_settingPreferences.getBoolean("checkbox_less_cmd_line",false))
+                            {
+                                showProgressBar(getString(R.string.register_ing));
+                            }
+                        _smackTool.connect( new SmackResultCallback() {
+                            @Override
+                            public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
+                                if (isOK) {
+                                    HashMap<String, String> map = new HashMap<String, String>();
+                                    _smackTool.register(userTemp, pwdTemp, map, new SmackResultCallback() {
+                                        @Override
+                                        public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
+                                            if (isOK) {
+                                                runOnUiThread(new Runnable() {
+                                                    @Override
+                                                    public void run() {
+                                                        if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                                            _items.add(new ChatItem(getString(R.string.register_success), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                                        }else
+                                                        {
+                                                            if(progressDialog!=null)
+                                                                progressDialog.dismiss();
+                                                            showToast(getString(R.string.register_success));
+                                                        }
+                                                    }
+                                                });
+                                                //注册成功,登录
+                                                loginAndMatchUser(userTemp, pwdTemp);
+                                            } else {
+                                                //注册失败
+                                                runOnUiThread(new Runnable() {
+                                                    @Override
+                                                    public void run() {
+                                                        showToast(getString(R.string.reg_fail));
+                                                        showLoginAndRegisterDialog();
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    });
                                 }
-                            });
+                            }
+                        });
+
 
                         }
                     }
@@ -324,7 +472,7 @@ public class MainActivity extends AppCompatActivity {
                             showLoginAndRegisterDialog();
                         }else if(!userNameView.getText().toString().matches(userRegex))
                         {
-                            showToast("用户名只能包含中文，英文和数字字符且不少于3位");
+                            showToast("用户名只能包含英文和数字字符且不少于3位");
                             showLoginAndRegisterDialog();
                         }
                         else if(pwdView.getText().toString().length()<7)
@@ -333,23 +481,29 @@ public class MainActivity extends AppCompatActivity {
                             showLoginAndRegisterDialog();
                         }
                         else {
+                            if(_settingPreferences.getBoolean("checkbox_less_cmd_line",false))
+                            {
+                                showProgressBar(getString(R.string.login_ing));
+                            }
                             /**
                              * 连接并登录
-                             * *************************************************************************************
-                             * 发布正式半的时候记得检查主机！！！！！！！！
                              */
-                            _smackTool.connect(ConstantPool.TEST_HOST, ConstantPool.REMOTE_PORT, new SmackResultCallback() {
+                            _smackTool.connect( new SmackResultCallback() {
                                 @Override
                                 public void onReceive(XMPPTCPConnection connection,final String msg, final boolean isOK) {
 
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                            if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                                _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                _recyclerView.scrollToPosition(_items.size() - 1);
+                                            }
                                             if(isOK)
                                             {
+                                                if(progressDialog!=null)
+                                                    progressDialog.dismiss();
                                                 _smackTool.login(userTemp, pwdTemp, new SmackResultCallback() {
                                                     @Override
                                                     public void onReceive(XMPPTCPConnection connection, final String msg, final boolean isOK) {
@@ -357,17 +511,31 @@ public class MainActivity extends AppCompatActivity {
                                                         runOnUiThread(new Runnable() {
                                                             @Override
                                                             public void run() {
-                                                                _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                                                _recyclerView.scrollToPosition(_items.size() - 1);
                                                                 if(isOK) {
-                                                                    _items.add(new ChatItem(getString(R.string.matching_user), ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                                                    _recyclerView.scrollToPosition(_items.size() - 1);
                                                                     SharedPreferences.Editor editor=_sharedPreferences.edit() ;
                                                                     editor.putString("username",userTemp)
                                                                             .putString("pwd",pwdTemp)
                                                                             .apply();
+                                                                    if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                                                        //登录成功
+                                                                        _items.add(new ChatItem(msg, ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                                                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                                                    }
+                                                                    //正在匹配
+                                                                    if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                                                        _items.add(new ChatItem(getString(R.string.matching_user), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                                                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                                                    }else
+                                                                    {
+                                                                        showProgressBar(getString(R.string.matching_user));
+                                                                    }
+                                                                    if(!_settingPreferences.getBoolean("checkbox_no_match_robot",true)) {
+                                                                        _timer = new Timer();
+                                                                        _timer.schedule(new WaitTask(), WAIT_TIME);
+                                                                    }
+                                                                    matchUser();
                                                                 }
                                                                 else
                                                                 {
@@ -377,7 +545,7 @@ public class MainActivity extends AppCompatActivity {
                                                             }
                                                         });
                                                     }
-                                                });//login
+                                                });//loginAndMatchUser
                                             }
                                         }
                                     });
@@ -389,15 +557,14 @@ public class MainActivity extends AppCompatActivity {
                 })
 
                 .create();
-       Window window= alertDialog.getWindow();
-       window.setBackgroundDrawableResource(android.R.drawable.alert_dark_frame);
+        alertDialog.setCancelable(false);
         alertDialog.show();
     }
 
     private class  WaitTask extends TimerTask {
         @Override
         public void run() {
-
+            _timer.cancel();
             MainActivity.this.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -412,8 +579,16 @@ public class MainActivity extends AppCompatActivity {
                                         @Override
                                         public void run() {
                                             _buttonSend.setEnabled(true);
-                                            _items.add(new ChatItem(getString(R.string.match_successful), ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                            _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, true,false));
+                                            if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                                _items.add(new ChatItem(getString(R.string.match_successful), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                _recyclerView.scrollToPosition(_items.size() - 1);
+                                            }else
+                                            {
+                                                if(progressDialog!=null)
+                                                    progressDialog.dismiss();
+                                            }
+                                            _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, true, false));
                                             _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
                                             _recyclerView.scrollToPosition(_items.size() - 1);
                                         }
@@ -468,7 +643,6 @@ public class MainActivity extends AppCompatActivity {
      */
     private class RobotCallback  implements  Callback
     {
-
         @Override
         public void onFailure(okhttp3.Call call, IOException e) {
 
@@ -483,11 +657,23 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         _canSend = true;
-//                        try {
-//                           // receiveMsg(jsonObject.getString("text"));
-//                        } catch (JSONException e) {
-//                            e.printStackTrace();
-//                        }
+                        try {
+                            String mainBody=jsonObject.getString("text");
+                            if (mainBody.length() < 50) {
+                                _items.add(new ChatItem(mainBody, ChatAdapter.TYPE_STRANGER_MSG, true,false));
+                            } else {
+                                _items.add(new ChatItem(mainBody, ChatAdapter.TYPE_STRANGER_MSG, false,false));
+                            }
+                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                            _recyclerView.scrollToPosition(_items.size() - 1);
+                            if (_isBackground) {
+                                showNotification(getString(R.string.tag_stranger) + mainBody
+                                        , getString(R.string.app_name)
+                                        , getString(R.string.tag_stranger) + mainBody);
+                            }
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
                     }});
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -504,34 +690,41 @@ public class MainActivity extends AppCompatActivity {
 
 
     /**
-     * 监听消息
+     * 监听聊天消息
      */
-    private  void startListenMsg() {
+    private  void startListenChatMsg() {
         //监听普通消息
         _smackTool.receiveChatMsg(new ChatMessageListener() {
             @Override
             public void processMessage(Chat chat, final Message message) {
 
+                final String mainBody=message.getBody();//主消息
+                final String cmdBody=message.getBody(ConstantPool.MESSAGE_TYPE_CMD);//cmd命令
+                final String cmdResult=message.getBody(ConstantPool.MESSAGE_TYPE_CMD_RESULT);//cmd结果
+                final String systemMsg=message.getBody(ConstantPool.MESSAGE_TYPE_SYSTEM);//系统
+                final String signMsg=message.getBody(ConstantPool.MESSAGE_TYPE_USER_SIGN);//系统
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        String mainBody=message.getBody();//主消息
-                        String cmdBody=message.getBody(ConstantPool.MESSAGE_TYPE_CMD);//cmd命令
-                        String cmdResult=message.getBody(ConstantPool.MESSAGE_TYPE_CMD_RESULT);
-                        String systemMsg=message.getBody(ConstantPool.MESSAGE_TYPE_SYSTEM);
                         //不处理乱来的消息
                         if(_state!=State.CHATTING_TO_PERSON)
                             return;
-                        if(mainBody==null&&cmdBody==null&&cmdResult==null&&systemMsg==null)
+                        if(mainBody==null&&cmdBody==null&&cmdResult==null&&systemMsg==null&&signMsg==null)
                             return;
 
-                        if (MessageTool.isCmd(message))//接收到shell命令
+                        if (MessageTool.isCmdMsg(message))//接收到shell命令
                         {
-                            if(_settingPreferences.getBoolean("checkbox_receive_msg",true))
+                            if(_settingPreferences.getBoolean("checkbox_receive_msg",true)
+                                    &&!CustomCmd.isUnCheckCmd(cmdBody))//不检查命令就不屏蔽
                             {
-                                _items.add(new ChatItem("对方给你发送了一个'"+cmdBody+"'命令，但已经被屏蔽", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                _recyclerView.scrollToPosition(_items.size() - 1);
+                                if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                    _items.add(new ChatItem("对方给你发送了一个'" + cmdBody + "'命令，但已经被屏蔽", ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                    _recyclerView.scrollToPosition(_items.size() - 1);
+                                }else
+                                {
+                                    showToast("对方给你发送了一个'" + cmdBody + "'命令，但已经被屏蔽");
+                                }
                                 if(_isBackground) {
                                     showNotification("对方给你发送了一个命令，但已经被屏蔽",getString(R.string.app_name),"对方给你发送了一个命令，但已经被屏蔽");
                                 }
@@ -539,32 +732,53 @@ public class MainActivity extends AppCompatActivity {
                                 _smackTool.sendSystemMsg(_friendId,getString(R.string.friend_not_access_cmd),null);
                                 return;
                             }
-                            //不合法的命令去除
+                            //不合法的命令去除,避免恶意入侵
                             if(!MessageTool.availableCmd(cmdBody))
                             {
-                                _items.add(new ChatItem("对方对您的手机执行了不合法的命令，已被屏蔽", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                _recyclerView.scrollToPosition(_items.size() - 1);
+                                if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                    _items.add(new ChatItem("对方对您的手机执行了不合法的命令，已被屏蔽", ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                    _recyclerView.scrollToPosition(_items.size() - 1);
+                                }else
+                                {
+                                    showToast("对方对您的手机执行了不合法的命令，已被屏蔽");
+                                }
                                 if(_isBackground)
                                 {
                                     showNotification("对方对您的手机执行了不合法的命令，已被屏蔽",getString(R.string.app_name),"对方对您的手机执行了不合法的命令，已被屏蔽");
                                 }
                                 return;
                             }
-
-                            _items.add(new ChatItem("对方对您的手机执行了‘" + cmdBody + "'命令", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                            _recyclerView.scrollToPosition(_items.size() - 1);
-                            if(_isBackground)
-                            {
-                                showNotification("对方对您的手机执行了‘" + cmdBody + "'命令",getString(R.string.app_name),"对方对您的手机执行了‘" + cmdBody + "'命令");
+                            //无返回命令就不提示了
+                            if(!CustomCmd.isRemoteNoReturnCustomCmd(cmdBody)){
+                                if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                    _items.add(new ChatItem("对方对您的手机执行了‘" + cmdBody + "'命令", ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                    _recyclerView.scrollToPosition(_items.size() - 1);
+                                }else
+                                {
+                                    showToast("对方对您的手机执行了‘" + cmdBody + "'命令");
+                                }
+                                if(_isBackground)
+                                {
+                                    showNotification("对方对您的手机执行了‘" + cmdBody + "'命令",getString(R.string.app_name),"对方对您的手机执行了‘" + cmdBody + "'命令");
+                                }
                             }
-                            if(CustomCmd.isRemoteCustomCmd(cmdBody))//判断是不是本地命令
+                            if(CustomCmd.isRemoteCustomCmd(cmdBody))//判断是不是远程命令
                             {
                                 String result=CustomCmd.runRemoteCmd(MainActivity.this, "",cmdBody,_adapter);
-                                //发送本地命令结果
+                                //发送远程命令结果
                                 _smackTool.sendCmdResult(_friendId, result, null);
                             }
+                            else if(CustomCmd.isRemoteNoReturnCustomCmd(cmdBody))//判断是不是远程非返回命令,意思是不返回给远程
+                            {
+                                String remoteNotReturnResult=CustomCmd.runRemoteNoReturnCmd(MainActivity.thiz,null,cmdBody,_adapter);
+                                //显示对方发来的命令结果
+                                _items.add(new ChatItem(remoteNotReturnResult, ChatAdapter.TYPE_STRANGER_MSG, false,true));
+                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                _recyclerView.scrollToPosition(_items.size() - 1);
+                            }
+
                             //这里不会出现localMsg
                             else
                             {
@@ -578,16 +792,27 @@ public class MainActivity extends AppCompatActivity {
                         } else if (MessageTool.isCmdResult(message))//接收到命令执行结果的时候，不慢速显示文本
                         {
                             //显示对方发来的命令结果
-                            _items.add(new ChatItem(cmdResult, ChatAdapter.TYPE_STRANGER_RESULT, false,false));
-                            //_adapter.notifyDataSetChanged();
-                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                _items.add(new ChatItem(cmdResult, ChatAdapter.TYPE_STRANGER_RESULT, false, false));
+                                //_adapter.notifyDataSetChanged();
+                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                _recyclerView.scrollToPosition(_items.size() - 1);
 
                         }
                         else if(MessageTool.isSystemMsg(message))//收到对方的系统消息
                         {
                             //显示收到对方的系统消息
-                            _items.add(new ChatItem(systemMsg, ChatAdapter.TYPE_SYSTEM_MSG, true,false));
+                            if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                _items.add(new ChatItem(systemMsg, ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                _recyclerView.scrollToPosition(_items.size() - 1);
+                            }else
+                            {
+                                showToast(systemMsg);
+                            }
+                        }
+                        else if(MessageTool.isSignMsg(message))//签名
+                        {
+                            _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, true,false));
                             _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
                             _recyclerView.scrollToPosition(_items.size() - 1);
                         }
@@ -614,68 +839,169 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
-        //监听系统消息
+
+        }
+
+    /**
+     * 监听非聊天消息
+     */
+    private  void startListenNonChatMsg() {
         _smackTool.receiveNonChatMsg(new OnReceiveNonChatMsg() {
             @Override
-            public void onReceive(String msgType, final String data, boolean isOK) {
+            public void onReceive(final XMPPTCPConnection connection, String msgType, String data, String from, String to, boolean isOK) {
                 if(isOK)
                 {
-                    log("------------->receiveNonChatMsg:"+msgType+","+data);
+                    log("------------->receiveNonChatMsg:"+msgType+",from:"+from+",to:"+to+",data:"+data);
                     if(msgType.equals(ConstantPool.MATCH_SUCCESS_SERVER))//服务器发来的匹配成功消息
                     {
-                                _friendId=data;
-                                final String jid=_sharedPreferences.getString("username","")+"@"+ConstantPool.LOCAL_HOST_WORD;
-                                //发送给对方
-                                _smackTool.sendMatchSuccess(_friendId,jid, new SmackResultCallback() {
-                                    @Override
-                                    public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
-                                        if (isOK) {
-                                            runOnUiThread(new Runnable() {
-                                                @Override
-                                                public void run() {
 
-                                                    _items.add(new ChatItem(getString(R.string.match_successful)+"1", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
+                        if(_state==State.MATCH_USER) {
+                            _friendId = data;
+                            final String jid = _sharedPreferences.getString("username", "") + "@" + ConstantPool.LOCAL_HOST_WORD;
+                            //发送给对方
+                            _smackTool.sendMatchSuccess(_friendId, jid, new SmackResultCallback() {
+                                @Override
+                                public void onReceive(final XMPPTCPConnection connection, String msg, boolean isOK) {
+                                    if (isOK) {
+                                        startListenChatMsg();
+                                        runOnUiThread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                                    _items.add(new ChatItem(getString(R.string.match_successful), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
                                                     _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
                                                     _recyclerView.scrollToPosition(_items.size() - 1);
-                                                    if (_isBackground) {
-                                                        showNotification(getString(R.string.match_successful)
-                                                                , getString(R.string.app_name)
-                                                                , getString(R.string.match_successful));
-                                                    }
-                                                    _buttonSend.setEnabled(true);
-                                                    _state=State.CHATTING_TO_PERSON;
                                                 }
-                                            });
-                                        }else
-                                        {
-                                            log("-------------->"+msg+","+jid);
-                                        }
+                                                else
+                                                {
+                                                    if(progressDialog!=null)
+                                                        progressDialog.dismiss();
+                                                    showToast(getString(R.string.match_successful));
+                                                }
+                                                if (_isBackground) {
+                                                    showNotification(getString(R.string.match_successful)
+                                                            , getString(R.string.app_name)
+                                                            , getString(R.string.match_successful));
+                                                }
+                                                _buttonSend.setEnabled(true);
+                                                _state = State.CHATTING_TO_PERSON;
+                                                if(_timer!=null)
+                                                    _timer.cancel();//匹配成功取消计时器
+                                                //获取vcard,设置签名
+                                                VCardManager vCardManager=VCardManager.getInstanceFor(connection);
+                                                VCard vCard=null;
+                                                try {
+                                                    vCard=vCardManager.loadVCard(_friendId.substring(0,_friendId.indexOf("@"))+"@"+ConstantPool.SERVER_NAME);
+                                                    String sign=vCard.getField("sign");
+                                                    if(sign!=null) {
+                                                        _items.add(new ChatItem(sign, ChatAdapter.TYPE_STRANGER_SIGN, false, true));
+                                                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                                    }
+                                                    else
+                                                    {
+                                                        _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, false,true));
+                                                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                                    }
+                                                } catch (Exception e) {
+                                                    e.printStackTrace();
+                                                    _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, false,true));
+                                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                                    _recyclerView.scrollToPosition(_items.size() - 1);
+                                                }
+                                            }
+                                        });
                                     }
-                                });
+                                }
+                            });
                         }
-                        else  if(msgType.equals(ConstantPool.MATCH_SUCCESS))//对方发来的匹配成功消息
-                        {
-                            _friendId=data;
-                            log("-------------->MATCH_SUCCESS:"+_friendId);
+                    }
+                    else  if(msgType.equals(ConstantPool.MATCH_SUCCESS))//对方发来的匹配成功消息
+                    {
+                        if(_state==State.MATCH_USER) {
+                            _friendId = from;
+                            startListenChatMsg();
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-
-                                    _items.add(new ChatItem(getString(R.string.match_successful), ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                    _recyclerView.scrollToPosition(_items.size() - 1);
-                                    if (_isBackground) {
-                                        showNotification(getString(R.string.match_successful), getString(R.string.app_name), getString(R.string.match_successful));
+                                    if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                        _items.add(new ChatItem(getString(R.string.match_successful), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                    }else
+                                    {
+                                        showToast(getString(R.string.match_successful));
+                                        if(progressDialog!=null)
+                                            progressDialog.dismiss();
                                     }
-                                    _state=State.CHATTING_TO_PERSON;
+                                    if (_isBackground) {
+                                        showNotification(getString(R.string.match_successful)
+                                                , getString(R.string.app_name)
+                                                , getString(R.string.match_successful));
+                                    }
                                     _buttonSend.setEnabled(true);
+                                    _state = State.CHATTING_TO_PERSON;
+                                    if(_timer!=null)
+                                         _timer.cancel();//匹配成功取消计时器
+                                    //获取vcard
+                                    VCardManager vCardManager=VCardManager.getInstanceFor(connection);
+                                    VCard vCard=null;
+                                    try {
+                                        vCard=vCardManager.loadVCard(_friendId.substring(0,_friendId.indexOf("@"))+"@"+ConstantPool.SERVER_NAME);
+                                        String sign=vCard.getField("sign");
+                                        if(sign!=null) {
+                                            _items.add(new ChatItem(sign, ChatAdapter.TYPE_STRANGER_SIGN, false, true));
+                                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                        }
+                                        else
+                                        {
+                                            _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, false,true));
+                                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                        }
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                        _items.add(new ChatItem(getString(R.string.stranger_no_sign), ChatAdapter.TYPE_STRANGER_SIGN, false,true));
+                                        _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                        _recyclerView.scrollToPosition(_items.size() - 1);
+                                    }
                                 }
                             });//runUiThread
                         }
-                    }//isOK
-                }
-            });//receiveNonChatMsg
-        }
+                    }
+                    else if(msgType.equals(ConstantPool.QUIT_CHAT))//对方发来的退出消息
+                    {
+                        if(_state==State.CHATTING_TO_PERSON) {
+                            //if(to.equals(connection.getUser())) {//是自己的该收的包才收
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                            _items.add(new ChatItem(getString(R.string.stranger_left), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                            _recyclerView.scrollToPosition(_items.size() - 1);
+                                        }else
+                                        {
+                                            showProgressBar(getString(R.string.stranger_left));
+                                        }
+                                    }
+                                });
+                            if(!_settingPreferences.getBoolean("checkbox_no_match_robot",true)) {
+                                _timer = new Timer();
+                                _timer.schedule(new WaitTask(), WAIT_TIME);
+                            }
+                                rematchUser();
+                           // }//equals
+                        }
+                    }
+
+                }//isOK
+
+            }
+        });//receiveNonChatMsg
+    }
 
     /**
      * 显示通知
@@ -686,21 +1012,29 @@ public class MainActivity extends AppCompatActivity {
     private void showNotification(String ticker,String title,String content)
     {
 
-            Notification notification=new Notification.Builder(MainActivity.this)
-                    .setTicker(ticker)
-                    .setSmallIcon(R.mipmap.app_icon)
-                    .setContentTitle(title)
-                    .setContentText(content)
-                    .setContentIntent(_pendingIntent)
-                    .setAutoCancel(true)
-                    .getNotification();
+            Notification.Builder notificationBuilder= new Notification.Builder(MainActivity.this);
+                    notificationBuilder.setTicker(ticker);
+                    notificationBuilder.setSmallIcon(R.mipmap.app_icon);
+                    notificationBuilder.setContentTitle(title);
+                    notificationBuilder.setContentText(content);
+
+                    notificationBuilder.setAutoCancel(true);
+                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        notificationBuilder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE);//在任何情况下都显示，不受锁屏影响
+                        //设置点击跳转
+                        notificationBuilder.setFullScreenIntent(_hangPendingIntent, true);//弹出时点击进入主界面
+                        notificationBuilder.setContentIntent(_pendingIntent);//下拉时点击进入主界面
+                    }else
+                    {
+                        notificationBuilder.setContentIntent(_pendingIntent);
+                    }
+            Notification notification= notificationBuilder.getNotification();
             _notificationManager.notify(NOTIFY_ID,notification);
 
     }
 
-
-    /*
-     *********************************************************************************************
+    /**
+     * *******************************************************************************************
      * 单击控件事件
      *********************************************************************************************
      **/
@@ -710,35 +1044,45 @@ public class MainActivity extends AppCompatActivity {
             //控件判断
             if (v.getId() == R.id.button_send) {
                 final String msg = _editMsg.getText().toString();
-                log("---------------->canSend:"+_canSend);
                 //为空判断
                 if (!TextUtils.isEmpty(msg) && _canSend) {
                     final String shell=msg.substring(1,msg.length());
                     //是否是命令
                     if (MessageTool.isCmd(msg)) {
-
                         //屏蔽命令
-                        if (_settingPreferences.getBoolean("checkbox_receive_msg", false)&&!CustomCmd.isLocalCustomCmd(shell))
+                        if (_settingPreferences.getBoolean("checkbox_receive_msg", false)
+                                &&!CustomCmd.isLocalCustomCmd(shell)//本地命令不屏蔽
+                                &&!CustomCmd.isUnCheckCmd(msg))//白名单命令不屏蔽
                         {
-                            _items.add(new ChatItem("由于你屏蔽了命令，所以你也不能发送命令", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                            _recyclerView.scrollToPosition(_items.size() - 1);
+                            if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                _items.add(new ChatItem(getString(R.string.cannot_send_cmd), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                _recyclerView.scrollToPosition(_items.size() - 1);
+                            }else
+                            {
+                                showToast(getString(R.string.cannot_send_cmd));
+                            }
                             return;
                         } else
                         //没有屏蔽
                         {
                             //命令不合法直接提示并返回
                             if (!MessageTool.availableCmd(shell)) {
-                                _items.add(new ChatItem("该命令不允许发送", ChatAdapter.TYPE_SYSTEM_MSG, true,false));
-                                _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
-                                _recyclerView.scrollToPosition(_items.size() - 1);
+                                if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                                    _items.add(new ChatItem(getString(R.string.this_cmd_cannot_send), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                                    _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                                    _recyclerView.scrollToPosition(_items.size() - 1);
+                                }else
+                                {
+                                    showToast(getString(R.string.this_cmd_cannot_send));
+                                }
                                 return;
                             }
                             //判断是否是系统命令
                              if(CustomCmd.isLocalCustomCmd(shell))
                             {
                                 //System.out.println("-------------->local");
-                                String result=CustomCmd.runLocalCmd(MainActivity.this,"" ,shell,_adapter);
+                                String result=CustomCmd.runLocalCmd(MainActivity.this,shell ,shell,_adapter);
                                 _items.add(new ChatItem(result, ChatAdapter.TYPE_SYSTEM_MSG, true,false));
                                 _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
                                 _recyclerView.scrollToPosition(_items.size() - 1);
@@ -749,7 +1093,6 @@ public class MainActivity extends AppCompatActivity {
                                  _smackTool.sendCmdMsg(_friendId, shell, new SmackResultCallback() {
                                      @Override
                                      public void onReceive(XMPPTCPConnection connection, String backMsg, boolean isOK) {
-                                         log(msg);
                                          if(isOK)
                                          {
                                              runOnUiThread(new Runnable() {
@@ -767,13 +1110,13 @@ public class MainActivity extends AppCompatActivity {
                                  });
                              }
                         }//是否屏蔽命令
-                    }//isCmd
+                    }//isCmdMsg
                     else {
                         if(_state==State.CHATTING_TO_PERSON)
                             sendTextMsg(msg);
                         else
                             sendToRobot(msg,new RobotCallback());
-                    }//isCmd
+                    }//isCmdMsg
                 }//_canSend
                 //点击文本框
             } else if (v.getId() == R.id.edit_msg) {
@@ -789,7 +1132,6 @@ public class MainActivity extends AppCompatActivity {
     private void sendTextMsg(final String text)
     {
         _canSend = false;
-        showToast(_friendId);
         _smackTool.sendTextMsg(_friendId, text, new SmackResultCallback() {
             @Override
             public void onReceive(XMPPTCPConnection connection,final String msg, final boolean isOK) {
@@ -806,7 +1148,7 @@ public class MainActivity extends AppCompatActivity {
                             _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
                             _recyclerView.scrollToPosition(_items.size() - 1);
                             _editMsg.setText("");
-                        }else {
+                        }else {//发送消息失败,断线重连
                             showToast(msg);
                         }
                         _canSend=true;
@@ -814,24 +1156,8 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
-
-
     }
 
-    /**
-     * 返回User表的项目id
-     *
-     * @return
-     */
-    private  void getRandomUser() {
-
-        if(_state==State.CHATTING_TO_PERSON||_state==State.CHATTING_TO_ROBOT)
-            return;
-        /**
-         *查询已抽到自己的人
-         */
-
-    }
 
     /**
      * 退出登陆
@@ -857,20 +1183,38 @@ public class MainActivity extends AppCompatActivity {
 
                 }
             });
-        }else
-        {
-            //不在匹配状态直接断开连接
-            _smackTool.disconnect(new SmackResultCallback() {
-                @Override
-                public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
-                    finish();
-                    System.exit(0);
-                }
-            });
-        }
+        }else if(_state==State.CHATTING_TO_PERSON) {
+                log("--------------->CHATTING_TO_PERSON");
+                //给对方发送我要退出
+                _smackTool.sendQuitChat(_friendId, new SmackResultCallback() {
+                    @Override
+                    public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
+                        if(isOK)
+                        {
+                            log("--------------->sendQuitChat OK "+_friendId);
+                            _smackTool.disconnect(new SmackResultCallback() {
+                                @Override
+                                public void onReceive(XMPPTCPConnection connection, String msg, boolean isOK) {
+                                    try {
+                                        Thread.sleep(500);
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                    finish();
+                                    System.exit(0);
+                                }
+                            });
+                        }
+                    }
+                });
 
-
-
+            }
+            //直接退出
+            else
+            {
+                finish();
+                System.exit(0);
+            }
     }
 
     @Override
@@ -920,6 +1264,18 @@ public class MainActivity extends AppCompatActivity {
                 showAlertDialog(getString(R.string.alert_rematch),new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
+                        if(!_settingPreferences.getBoolean("checkbox_less_cmd_line",false)) {
+                            _items.add(new ChatItem(getString(R.string.rematching_user), ChatAdapter.TYPE_SYSTEM_MSG, true, false));
+                            _adapter.notifyItemRangeChanged(_items.size() - 1, 1);
+                            _recyclerView.scrollToPosition(_items.size() - 1);
+                        }else
+                        {
+                            showProgressBar(getString(R.string.rematching_user));
+                        }
+                        if(!_settingPreferences.getBoolean("checkbox_no_match_robot",true)) {
+                            _timer = new Timer();
+                            _timer.schedule(new WaitTask(), WAIT_TIME);
+                        }
                         rematchUser();
                     }
                 },null);
@@ -971,9 +1327,27 @@ public class MainActivity extends AppCompatActivity {
                 .setNegativeButton("取消", onCancelClickListener)
                 .setPositiveButton("确定", onOkClickListener)
                 .create();
-        Window window=al.getWindow();
-        window.setBackgroundDrawableResource(android.R.drawable.alert_dark_frame);
         al.show();
+    }
+
+    /**
+     * 显示进度框
+     */
+    private  void showProgressBar(final CharSequence text)
+    {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                progressDialog=new ProgressDialog(MainActivity.this);
+                progressDialog.setMessage(text);
+                progressDialog.setCancelable(false);
+                progressDialog.setIndeterminate(false);
+                Window window=progressDialog.getWindow();
+                window.setBackgroundDrawableResource(android.R.drawable.alert_dark_frame);
+                progressDialog.show();
+            }
+        });
+
     }
     @Override
     protected void onPause() {
@@ -993,6 +1367,18 @@ public class MainActivity extends AppCompatActivity {
             if(_state==State.CHATTING_TO_PERSON) {
                 _smackTool.sendSystemMsg(_friendId, getString(R.string.friend_into_foreground), null);
             }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if(_state==State.CHATTING_TO_PERSON)
+        {
+            _smackTool.sendQuitChat(_friendId,null);
+        }
+        else if(_state==State.MATCH_USER){
+            _smackTool.requireQuitMatchUser(null);
         }
     }
 }

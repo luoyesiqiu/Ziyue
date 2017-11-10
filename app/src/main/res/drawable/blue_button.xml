@@ -4,7 +4,7 @@
 
 	<item android:state_enabled="true" android:state_pressed="false"> 
 		<shape> 
-			<gradient android:startColor="#1B70C5" android:endColor="#25ACE4" 
+			<gradient android:startColor="#1B70C5" android:endColor="#25ACE4"
 				android:angle="90.0"> 
 			</gradient> 
 			<corners 

@@ -4,6 +4,9 @@ import android.text.TextUtils;
 
 import org.jivesoftware.smack.packet.Message;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Created by zyw on 2017/1/30.
  */
@@ -16,14 +19,22 @@ public class MessageTool {
      */
     public static boolean availableCmd(String cmd)
     {
+        //不包含html,且含有=的不给发送
+        if((!cmd.startsWith("html")&&cmd.contains("="))
+                &&(!cmd.startsWith("sign")&&cmd.contains("=")))
+        {
+            return  false;
+        }
 
         if(cmd.matches(".*echo.+>.*/data/data/.+"))//不允许重定向到data
         {
             return false;
         }
         for(int i = 0; i< ConstantPool.unusableCmd.length; i++)
-        {
-            if(cmd.matches("\\s*"+ ConstantPool.unusableCmd[i]+"($|\\s+.*)"))
+        {;
+            Pattern pattern= Pattern.compile("\\b"+ ConstantPool.unusableCmd[i]+"\\b");
+            Matcher matcher=pattern.matcher(cmd);
+            if(matcher.find())
                 return false;
         }
         return true;
@@ -34,7 +45,7 @@ public class MessageTool {
      * @param msg
      * @return
      */
-    public static boolean isCmd(Message msg)
+    public static boolean isCmdMsg(Message msg)
     {
         String mainBody=msg.getBody();
         String cmdBody=msg.getBody(ConstantPool.MESSAGE_TYPE_CMD);
@@ -48,7 +59,7 @@ public class MessageTool {
      */
     public static boolean isCmd(String msg)
     {
-        return  msg.startsWith("$");
+        return  msg.startsWith("$")&&msg.length()>1;
     }
     /**
      * 返回一个消息是否是命令结果
@@ -71,5 +82,17 @@ public class MessageTool {
         String mainBody=msg.getBody();
         String systemMsg=msg.getBody(ConstantPool.MESSAGE_TYPE_SYSTEM);
         return  TextUtils.isEmpty(mainBody)&&!TextUtils.isEmpty(systemMsg);
+    }
+
+    /**
+     * 返回一个消息是否是签名
+     * @param msg
+     * @return
+     */
+    public static boolean isSignMsg(Message msg)
+    {
+        String mainBody=msg.getBody();
+        String signMsg=msg.getBody(ConstantPool.MESSAGE_TYPE_USER_SIGN);
+        return  TextUtils.isEmpty(mainBody)&&!TextUtils.isEmpty(signMsg);
     }
 }

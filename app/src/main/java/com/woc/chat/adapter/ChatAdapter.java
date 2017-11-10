@@ -173,6 +173,7 @@ public class ChatAdapter extends  RecyclerView.Adapter<RecyclerView.ViewHolder> 
                         MainActivity.thiz.runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
+                                if(msgViewHolder.msgTextView.length()>0)
                                 msgViewHolder.msgTextView.getEditableText().delete(msgViewHolder.msgTextView.length() - 1, msgViewHolder.msgTextView.length());
 
                             }

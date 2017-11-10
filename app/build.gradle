@@ -8,8 +8,8 @@ android {
         applicationId "com.woc.chat"
         minSdkVersion 15
         targetSdkVersion 23
-        versionCode 12
-        versionName "17.1.6.2"
+        versionCode 20
+        versionName "17.4.16.1"
         /*ndk {
             moduleName "data"          //生成的so名字
         }*/
@@ -18,7 +18,6 @@ android {
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            shrinkResources true
         }
         debug {
             minifyEnabled false
@@ -40,9 +39,6 @@ dependencies {
     compile 'com.android.support:appcompat-v7:23.0.0'
     compile 'com.android.support:recyclerview-v7:23.0.0'
     compile files('src/main/libs/markdownpapers-core-1.4.1.jar')
-    compile files('src/main/libs/tulingSDK1.4.jar')
-    compile files('src/main/libs/turinghttp_1.0.jar')
-    compile files('src/main/libs/volley.jar')
     compile files('src/main/libs/okhttp-3.3.1.jar')
     compile files('src/main/libs/smack-core-4.1.9.jar')
     compile files('src/main/libs/smack-im-4.1.9.jar')
@@ -53,4 +49,7 @@ dependencies {
     compile files('src/main/libs/jxmpp-util-cache-0.5.0-alpha7.jar')
     compile files('src/main/libs/smack-android-4.1.9.jar')
     compile 'com.android.support:design:23.0.0'
+    compile files('src/main/libs/smack-android-extensions-4.1.9.jar')
+    compile project(':secure-prefs-library-release-v0.1.0')
+    compile project(':aes-crypto')
 }

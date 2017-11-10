@@ -11,8 +11,10 @@ import android.os.Bundle;
 import android.preference.PreferenceFragment;
 import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
+import android.widget.ListView;
 
 import com.woc.chat.R;
+import com.woc.chat.fragment.SettingPreferenceFragment;
 import com.woc.chat.util.StatusBar;
 
 /**
@@ -26,7 +28,7 @@ public class SettingActivity extends AppCompatActivity {
 
         FragmentManager fragmentManager=getFragmentManager();
         FragmentTransaction fragmentTransaction=fragmentManager.beginTransaction();
-        fragmentTransaction.replace(android.R.id.content,new SettingFragment());
+        fragmentTransaction.replace(android.R.id.content,new SettingPreferenceFragment());
         fragmentTransaction.commit();
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         //沉浸状态栏
@@ -42,12 +44,6 @@ public class SettingActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    public static class SettingFragment extends PreferenceFragment{
-        @Override
-        public void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            addPreferencesFromResource(R.xml.setting);
 
-        }
-    }
 }
+

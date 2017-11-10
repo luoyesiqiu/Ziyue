@@ -1,6 +1,8 @@
 package com.woc.chat.util;
 
+import android.app.Notification;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
@@ -11,11 +13,23 @@ import com.woc.chat.R;
 import com.woc.chat.adapter.ChatAdapter;
 import com.woc.chat.entity.ChatItem;
 
+import org.jivesoftware.smackx.vcardtemp.VCardManager;
+import org.jivesoftware.smackx.vcardtemp.packet.VCard;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-//import jackpal.term.Term;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 /**
  * Created by zyw on 2016/9/21.
@@ -23,54 +37,74 @@ import java.util.Set;
  */
 public class CustomCmd {
     private static Vibrator vibrator;
-
+   private static String friendJID;
     private static  final  String VIBRATE="vibrate";
     private static  final  String PLAY="play";
     private static  final String SIGN="sign";
     private static  final String VERSION="version";
     private static  final String CLEAR="clear";
-    private static  final  String TERM="term";
     private static final String EXPORT="export";
-    private static String[] remoteCmdTable ={VIBRATE,PLAY,VERSION};
-    private static String[] localCmdTable ={SIGN,CLEAR,TERM,EXPORT};
+    private static final String HTML="html";
+    private  static  final  String C_LOGIN ="clogin";
+    private  static  final  String GET_IP="getip";
+    private static String[] remoteCmdTable ={VIBRATE,PLAY,VERSION,GET_IP};
+    private static String[] remoteNoReturnCmdTable ={HTML};
+    private static String[] localCmdTable ={SIGN,CLEAR,EXPORT, C_LOGIN};
+    private static String[] unCheckCmdTable ={HTML};
     private static String signMsg="更改签名成功";
     private static String SD_PATH= Environment.getExternalStorageDirectory().getAbsolutePath();
+    private static SmackTool smackTool;
     /**
      * 让本地运行命令
      * @param context
-     * @param user
+     * @param friendJID
      * @param cmd
      * @return
      */
-    public static  String runLocalCmd(Context context,String user,String cmd,ChatAdapter chatAdapter)
+    public static  String runLocalCmd(Context context,String friendJID,String cmd,ChatAdapter chatAdapter)
     {
-        String[] cmds=cmd.split("\\s+");
+        String[] params=cmd.split("\\s+");
         String msg=null;
-        switch (cmds[0])
+        switch (params[0])
         {
             //设置签名
             case SIGN:
-                if(cmds.length<2)
+                if(params.length<2)
                 {
                     msg="参数个数不对";
                     break;
                 }
-                msg=setSign(user,cmds[1]);
+                msg=setSign(context,"",cmd.substring(cmd.indexOf(' ')));
                 break;
 
             case CLEAR:
                 msg=clearList(context,chatAdapter);
                 break;
 
-            case TERM:
-                msg=runTerm(context);
-                break;
             case EXPORT:
-                msg=exportMsg(context,SD_PATH+File.separator+cmds[1],chatAdapter);
+                if(params.length<2)
+                {
+                    msg="参数个数不对";
+                    break;
+                }
+                msg=exportMsg(context,SD_PATH+File.separator+params[1],chatAdapter);
+                break;
+            case C_LOGIN:
+                msg=clearLogin(context);
+                break;
+
         }
         return msg;
     }
 
+
+    public  static String clearLogin(Context context)
+    {
+        SharedPreferences sharedPreferences=context.getSharedPreferences("data",Context.MODE_PRIVATE);
+        sharedPreferences.edit().clear().apply();
+       // System.exit(0);
+        return "清除登录信息成功";
+    }
 
     public static  String exportMsg(Context context,String path,ChatAdapter chatAdapter)
     {
@@ -81,9 +115,9 @@ public class CustomCmd {
         if(chatMsgList.size()!=prefixList.size()||chatMsgList.size()!=typeList.size())
             return  "聊天记录导出失败";
         sb.append("<html>\n<head>\n");
-        sb.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n");
+        sb.append("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"  name=\"viewport\"content=\"width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes\">\n");
         sb.append("<style type=\"text/css\">\n");
-        sb.append("body{background-color:black}");
+        sb.append("body{background-color:black;}");
         sb.append("</style>\n");
         sb.append("</head>\n");
         sb.append("<title>");
@@ -117,26 +151,36 @@ public class CustomCmd {
             }
 
         }
-        sb.append("</body>");
+        sb.append("</body>\n");
         sb.append("</html>");
         String msg=IO.writeFile(new File(path),sb.toString());
         if(msg==null)
             return  "聊天记录导出成功,目录："+path;
         return msg;
     }
-
     /**
-     * 启动终端模拟器
+     * 让远程运行命令
      * @param context
+     * @param cmd
      * @return
      */
-    public  static  String runTerm(Context context)
+    public static  String runRemoteNoReturnCmd(Context context,String user,String cmd,ChatAdapter chatAdapter)
     {
-
-//        Intent intent=new Intent(context,Term.class);
-//        context.startActivity(intent);
-
-        return  "启动终端成功";
+        String[] params=cmd.split("\\s+");
+        String msg=null;
+        switch (params[0])
+        {
+            //震动
+            case HTML:
+                if(params.length<2)
+                {
+                    msg="参数个数不对";
+                    break;
+                }
+                msg=handleHtmlCmd(cmd.substring(cmd.indexOf(' ')));
+            break;
+        }
+        return  msg;
     }
     /**
      * 让远程运行命令
@@ -146,48 +190,118 @@ public class CustomCmd {
      */
     public static  String runRemoteCmd(Context context,String user,String cmd,ChatAdapter chatAdapter)
     {
-        String[] cmds=cmd.split("\\s+");
-        String msg=null;
-        switch (cmds[0])
+        String[] params=cmd.split("\\s+");
+        final String[] msg = {null};
+        switch (params[0])
         {
             //震动
             case VIBRATE:
-                if(cmds.length<2)
+                if(params.length<2)
                 {
-                    msg="参数个数不对";
+                    msg[0] ="参数个数不对";
                     break;
                 }
                 try {
-                    int time = Integer.parseInt(cmds[1]);
+                    int time = Integer.parseInt(params[1]);
                     if(time<=100000)
                     {
-                        msg = vibrate(context, time);
+                        msg[0] = vibrate(context, time);
                     }else {
-                        msg="时间设置得过长";
+                        msg[0] ="时间设置得过长";
                     }
                 }
                 catch(NumberFormatException e)
                 {
-                    msg="参数不正确";
+                    msg[0] ="参数不正确";
                 }
                 break;
             //播放音乐
             case PLAY:
-                if(cmds.length<2)
+                if(params.length<2)
                 {
-                    msg="参数个数不对";
+                    msg[0] ="参数个数不对";
                     break;
                 }
-                msg=playSound(cmds[1]);
+                msg[0] =playSound(params[1]);
                 break;
             //获取版本
             case VERSION:
-                msg=getAppVersion(context);
+                msg[0] =getAppVersion(context);
                 break;
+            case GET_IP:
+                Thread thread=new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        msg[0] =getIp();
+                    }
+                });
 
+                thread.start();
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                break;
         }
-        return  msg;
+        return msg[0];
     }
+
+
+    /**
+     * 获取ip
+     */
+    private  static String  getIp()
+    {
+        final String[] arr=new String[1];
+        final boolean[] ok=new boolean[1];
+         StringBuilder result=new StringBuilder();
+        OkHttpClient okHttpClient=new OkHttpClient();
+
+        Request request = new Request.Builder().url(ConstantPool.getIPUrl1)
+                .addHeader("User-Agent",ConstantPool.UA)
+                .get()
+                .build();
+        Call call = okHttpClient.newCall(request);
+
+        try {
+            Response response=call.execute();
+            arr[0]=response.body().string();
+            //System.out.println("-------------->2"+arr[0]);
+            ok[0]=true;
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            arr[0]=e.toString();
+            ok[0]=false;
+        }
+        if(!ok[0])
+        {
+            return  arr[0];
+        }
+        String json=arr[0].substring(arr[0].indexOf('{'),arr[0].indexOf(';'));
+        //System.out.println("-------------->3"+json);
+        try {
+            JSONObject jsonObject=new JSONObject(json);
+            result.append("IP:"+jsonObject.getString("cip")+"\n");
+            result.append("运营商："+jsonObject.getString("cname"));
+;
+        } catch (JSONException e) {
+            e.printStackTrace();
+            return  e.toString();
+        }
+        return result.toString();
+    }
+    /**
+     * 处理HTML
+     * @param text
+     * @return
+     */
+    private static  String handleHtmlCmd(String text)
+    {
+        return text;
+    }
+
 
     /**
      * 获取应用版本
@@ -226,14 +340,23 @@ public class CustomCmd {
      * @param signString
      * @return
      */
-    private static String setSign(String user, final String signString)
-    {
-        if(signString.length()>100)
+    private static String setSign(Context context,String user, final String signString){
+        if(signString.length()>200)
         {
-            return "签名长度不能大于100个字符";
+            return "签名长度不能大于200个字符";
         }
 
-        return signMsg;
+        VCard vCard=new VCard();
+        vCard.setField("sign",signString);
+        ;VCardManager vCardManager=VCardManager.getInstanceFor(SmackTool.getConnection());
+        try {
+            vCardManager.saveVCard(vCard);
+            return  "更改签名成功";
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return  "更改签名失败";
     }
 
 
@@ -298,6 +421,38 @@ public class CustomCmd {
         for(int i = 0; i< localCmdTable.length; i++)
         {
             if(str[0].contains(localCmdTable[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * 判断是不是远程无返回命令
+     * @param cmd
+     * @return
+     */
+    public static boolean isRemoteNoReturnCustomCmd(String cmd)
+    {
+        String[] str=cmd.split("\\s+");
+        for(int i = 0; i< remoteNoReturnCmdTable.length; i++)
+        {
+            if(str[0].contains(remoteNoReturnCmdTable[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * 判断是不是不检查命令
+     * @param cmd
+     * @return
+     */
+    public static boolean isUnCheckCmd(String cmd)
+    {
+        String[] str=cmd.split("\\s+");
+        for(int i = 0; i< unCheckCmdTable.length; i++)
+        {
+            if(str[0].contains(unCheckCmdTable[i]))
                 return true;
         }
         return false;

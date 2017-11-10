@@ -13,6 +13,7 @@
     <string name="match_successful">匹配用户成功，现在可以开始聊天啦</string>
     <string name="login_successful">登录成功</string>
     <string name="matching_user">正在匹配用户...请等待</string>
+    <string name="rematching_user">正在重新匹配用户...请等待</string>
     <string name="deal_error">出了点小问题，正在为您处理</string>
     <string name="reg_successful">注册成功</string>
     <string name="reg_fail">注册失败，该用户名可能已经存在</string>
@@ -24,6 +25,10 @@
     <string name="title_login_and_register">登录/注册</string>
     <string name="alert_rematch">确定要重新匹配？</string>
     <string name="not_install_alipay">您未安装支付宝</string>
+    <string name="offline_reconnect">您已断线，正在重连...</string>
+    <string name="connect_ing">连接服务器中...</string>
+    <string name="login_ing">登录中...</string>
+    <string name="register_ing">注册中...</string>
     <!--回调消息类-->
     <string name="login_success">登录成功</string>
     <string name="login_fail">登录失败</string>
@@ -47,4 +52,8 @@
     <string name="disconnect_fail">断开服务器连接失败</string>
     <string name="send_match_success_msg_success">发送匹配成功消息成功</string>
     <string name="send_match_success_msg_fail">发送匹配成功消息失败</string>
+    <string name="send_quit_chat_msg_success">发送退出聊天消息成功</string>
+    <string name="send_quit_chat_msg_fail">发送退出聊天消息失败</string>
+    <string name="send_sign_msg_success">发送个人签名成功</string>
+    <string name="send_sign_msg_fail">发送个人签名失败</string>
 </resources>
