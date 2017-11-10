@@ -6,4 +6,6 @@
 使用Redis数据库模拟队列，当用户打开软件和退出时来进行 相应的入队和出队操作。 
 ## Openfire服务端插件源码
 https://github.com/luoyesiqiu/MatchUserPlugin
+## 软件截图
+![截图](/screenshot/main.jpg)
 
